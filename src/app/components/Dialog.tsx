@@ -15,7 +15,7 @@ export function Dialog(props: DialogProps) {
       onClick={props.onClose}
     >
       <div
-        class={`h-96 w-2xl rounded-lg bg-white p-6 shadow-xl transition-all duration-200 ease-out
+        class={`h-96 w-2xl overflow-hidden rounded-lg bg-white shadow-xl transition-all duration-200 ease-out
                 ${props.open ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
         onClick={(e) => e.stopPropagation()}
       >
