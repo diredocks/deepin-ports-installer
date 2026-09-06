@@ -1,6 +1,8 @@
-import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { defineConfig } from "vite";
+import solidPlugin from "vite-plugin-solid";
 
 // https://vitejs.dev/config
 export default defineConfig({
@@ -10,4 +12,5 @@ export default defineConfig({
       "~": fileURLToPath(new URL("./src/app", import.meta.url)),
     },
   },
+  plugins: [solidPlugin(), tailwindcss()],
 });

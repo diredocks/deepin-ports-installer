@@ -4,7 +4,8 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "esnext",
-    "jsx": "react-jsx",
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -16,5 +17,5 @@
     "outDir": "dist",
     "resolveJsonModule": true
   },
-  "include": ["src/app/renderer.ts", "vite.renderer.config.ts", "*.d.ts"]
+  "include": ["src/app/*.tsx", "src/app/*.ts", "vite.renderer.config.ts", "*.d.ts"]
 }

@@ -26,6 +26,8 @@
  * ```
  */
 
+import { render } from "solid-js/web";
 import "~/index.css";
+import { Router } from "~/App";
 
-console.log('👋 This message is being logged by "renderer.ts", included via Vite');
+render(() => <Router />, document.getElementById("root")!);
