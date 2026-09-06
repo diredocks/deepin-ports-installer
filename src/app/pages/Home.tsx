@@ -1,8 +1,10 @@
 // TODO: select device
 
 import { mdiFlash, mdiFolderOpenOutline, mdiHarddisk, mdiLinkVariant, mdiLaptop } from "@mdi/js";
+import { createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import { Icon } from "~/components/Icon";
+import { Dialog } from "~/components/Dialog";
 
 const ghostButton =
   "flex w-full items-center justify-center gap-2 rounded-full border border-gray-300 " +
@@ -36,6 +38,8 @@ function Step(props: StepProps) {
 }
 
 export function Home() {
+  const [deviceDialogOpen, setDeviceDialogOpen] = createSignal(false);
+
   return (
     <div class="flex h-[calc(100%-2rem)] select-none items-center justify-center px-10">
       <div class="w-full max-w-3xl">
@@ -55,7 +59,7 @@ export function Home() {
             description="Choose the type of device you want to flash"
           >
             <div class="flex w-48 flex-col gap-3">
-              <button type="button" class={ghostButton}>
+              <button type="button" class={ghostButton} onClick={() => setDeviceDialogOpen(true)}>
                 <Icon path={mdiLinkVariant} size={16} class="text-gray-400" />
                 Go select
               </button>
@@ -100,6 +104,7 @@ export function Home() {
           </Step>
         </div>
       </div>
+      <Dialog open={deviceDialogOpen()} onClose={() => setDeviceDialogOpen(false)} />
     </div>
   );
 }
