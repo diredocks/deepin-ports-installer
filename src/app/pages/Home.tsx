@@ -1,12 +1,6 @@
 // TODO: select device
 
-import {
-  mdiFolderOpenOutline,
-  mdiFlash,
-  mdiHarddisk,
-  mdiImageOutline,
-  mdiLinkVariant,
-} from "@mdi/js";
+import { mdiFlash, mdiHarddisk, mdiLinkVariant, mdiLaptop } from "@mdi/js";
 import type { JSX } from "solid-js";
 import { Icon } from "~/components/Icon";
 
@@ -55,19 +49,15 @@ export function Home() {
             class="absolute top-6.75 h-0.5 bg-gray-200 left-[calc(50%+34px)] w-[calc(33%-68px)]"
           />
           <Step
-            icon={mdiImageOutline}
+            icon={mdiLaptop}
             glyphClass="text-gray-600"
-            title="Select image / source"
-            description="Choose an image file or provide a download link"
+            title="Select device type"
+            description="Choose the type of device you want to flash"
           >
-            <div class="flex w-48 flex-col gap-3">
-              <button type="button" class={ghostButton}>
-                <Icon path={mdiFolderOpenOutline} size={16} class="text-gray-400" />
-                From file…
-              </button>
+            <div class="flex w-36 flex-col gap-3">
               <button type="button" class={ghostButton}>
                 <Icon path={mdiLinkVariant} size={16} class="text-gray-400" />
-                From link…
+                Go select
               </button>
             </div>
           </Step>
