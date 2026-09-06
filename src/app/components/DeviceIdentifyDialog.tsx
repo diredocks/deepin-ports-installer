@@ -22,7 +22,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
               />
               <select
                 class="w-full appearance-none bg-white py-2 pl-9 pr-8 text-sm text-gray-700
-                       focus:outline-none"
+                       transition-colors hover:bg-gray-100 focus:outline-none"
               >
                 <option>Architecture</option>
               </select>
@@ -40,7 +40,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
               />
               <select
                 class="w-full appearance-none bg-white py-2 pl-9 pr-8 text-sm text-gray-700
-                       focus:outline-none"
+                       transition-colors hover:bg-gray-100 focus:outline-none"
               >
                 <option>Device model</option>
               </select>
@@ -58,7 +58,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
               />
               <select
                 class="w-full appearance-none bg-white py-2 pl-9 pr-8 text-sm text-gray-700
-                       focus:outline-none"
+                       transition-colors hover:bg-gray-100 focus:outline-none"
               >
                 <option>Version</option>
               </select>
