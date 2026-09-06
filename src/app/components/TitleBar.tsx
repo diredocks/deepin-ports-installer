@@ -1,6 +1,6 @@
 import { mdiClose, mdiWindowMinimize } from "@mdi/js";
 import { Icon } from "~/components/Icon";
-import logo from "~/components/assets/logo.svg";
+import logo from "~/assets/logo.svg";
 
 export function TitleBar() {
   return (
