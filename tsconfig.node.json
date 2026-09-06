@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "paths": { "*": ["./*"] },
+    "outDir": "dist",
+    "resolveJsonModule": true
+  },
+  "include": [
+    "vite.main.config.ts",
+    "vite.preload.config.ts",
+    "forge.config.ts",
+    "src/main.ts",
+    "src/preload.ts",
+    "*.d.ts",
+    "vite-env.d.ts"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "paths": { "*": ["./*"] },
+    "outDir": "dist",
+    "resolveJsonModule": true
+  },
+  "include": ["src/renderer.ts", "vite.renderer.config.ts", "*.d.ts"]
+}
