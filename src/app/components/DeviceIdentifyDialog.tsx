@@ -1,4 +1,4 @@
-import { mdiChevronDown, mdiChip, mdiDevices, mdiTagMultiple } from "@mdi/js";
+import { mdiChevronDown, mdiChip, mdiDevices, mdiHelpCircleOutline, mdiTagMultiple } from "@mdi/js";
 import { Dialog } from "~/components/Dialog";
 import { Icon } from "~/components/Icon";
 
@@ -12,7 +12,10 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
     <Dialog open={props.open} onClose={props.onClose}>
       <div class="flex h-full">
         <div class="flex flex-1 flex-col p-6">
-          <h2 class="text-base font-medium text-gray-800">Identify your device</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-medium text-gray-800">Identify your device</h2>
+            <Icon path={mdiHelpCircleOutline} size={16} class="text-gray-400" />
+          </div>
           <div class="mt-5 flex flex-col overflow-hidden rounded border border-gray-300">
             <div class="relative border-b border-gray-300">
               <Icon
