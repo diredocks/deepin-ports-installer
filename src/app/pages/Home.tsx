@@ -32,8 +32,10 @@ function Step(props: StepProps) {
       >
         <Icon path={props.icon} size={28} class={props.glyphClass} />
       </div>
-      <h2 class="mt-8 text-base font-medium text-gray-800">{props.title}</h2>
-      <p class="mt-1 text-xs text-gray-400">{props.description}</p>
+      <h2 class="mt-8 text-center text-base font-medium text-gray-800">{props.title}</h2>
+      <p class="mt-1 grid min-h-8 text-center text-xs leading-4 text-gray-400">
+        {props.description}
+      </p>
       <div class="mt-5 flex flex-col items-center">{props.children}</div>
     </div>
   );
@@ -52,31 +54,46 @@ export function Home() {
             aria-hidden="true"
             class="absolute top-6.75 h-0.5 bg-gray-200 left-[calc(50%+34px)] w-[calc(33%-68px)]"
           />
-          <Step icon={mdiImageOutline} title="选择镜像 / 源文件" description="选择镜像文件或填写下载链接">
+          <Step
+            icon={mdiImageOutline}
+            glyphClass="text-gray-600"
+            title="Select image / source"
+            description="Choose an image file or provide a download link"
+          >
             <div class="flex w-48 flex-col gap-3">
               <button type="button" class={ghostButton}>
                 <Icon path={mdiFolderOpenOutline} size={16} class="text-gray-400" />
-                从文件…
+                From file…
               </button>
               <button type="button" class={ghostButton}>
                 <Icon path={mdiLinkVariant} size={16} class="text-gray-400" />
-                从链接…
+                From link…
               </button>
             </div>
           </Step>
 
-          <Step icon={mdiHarddisk} glyphClass="text-gray-400" title="选择目标设备" description="镜像将被写入所选设备">
+          <Step
+            icon={mdiHarddisk}
+            glyphClass="text-gray-400"
+            title="Select target device"
+            description="The image will be written to the selected device"
+          >
             <button
               type="button"
               class="rounded-full border border-dashed border-gray-300 bg-white px-7 py-2
                      text-sm text-gray-500 shadow-sm transition-colors hover:border-gray-400
                      hover:text-gray-700 active:bg-gray-100"
             >
-              选择设备
+              Select device
             </button>
           </Step>
 
-          <Step icon={mdiFlash} glyphClass="text-orange-500" title="开始烧录" description="检查无误后开始写入">
+          <Step
+            icon={mdiFlash}
+            glyphClass="text-orange-500"
+            title="Start flashing"
+            description="Verify everything and start writing"
+          >
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded-full bg-blue-500 px-8 py-2
@@ -84,7 +101,7 @@ export function Home() {
                      hover:bg-blue-600 active:bg-blue-700"
             >
               <Icon path={mdiFlash} size={16} />
-              烧录!
+              Flash!
             </button>
           </Step>
         </div>
