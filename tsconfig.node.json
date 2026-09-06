@@ -18,7 +18,7 @@
     "vite.preload.config.ts",
     "forge.config.ts",
     "src/main.ts",
-    "src/preload.ts",
+    "src/app/preload.ts",
     "*.d.ts",
     "vite-env.d.ts"
   ]

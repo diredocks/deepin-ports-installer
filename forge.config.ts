@@ -30,7 +30,7 @@ const config: ForgeConfig = {
           target: 'main',
         },
         {
-          entry: 'src/preload.ts',
+          entry: 'src/app/preload.ts',
           config: 'vite.preload.config.ts',
           target: 'preload',
         },
