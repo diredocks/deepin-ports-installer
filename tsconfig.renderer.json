@@ -10,7 +10,9 @@
     "esModuleInterop": true,
     "noImplicitAny": true,
     "sourceMap": true,
-    "paths": { "*": ["./*"] },
+    "paths": {
+      "~/*": ["./src/app/*"]
+    },
     "outDir": "dist",
     "resolveJsonModule": true
   },
