@@ -9,12 +9,14 @@ export function TitleBar() {
         <button
           class="w-12 h-full flex items-center justify-center
                  text-gray-500 hover:bg-gray-200 active:bg-gray-300"
+          onClick={() => window.electron.window.minimize()}
         >
           <Icon path={mdiWindowMinimize} size={14} />
         </button>
         <button
           class="w-12 h-full flex items-center justify-center
                  text-gray-500 hover:bg-gray-200 active:bg-gray-300"
+          onClick={() => window.electron.window.close()}
         >
           <Icon path={mdiClose} size={18} />
         </button>

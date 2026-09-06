@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path, { dirname } from "node:path";
 import started from "electron-squirrel-startup";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,9 @@ const createWindow = () => {
   } else {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
+
+  ipcMain.handle("window:minimize", () => mainWindow.minimize());
+  ipcMain.handle("window:close", () => mainWindow.close());
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools({ mode: "detach" });
