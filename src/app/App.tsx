@@ -7,9 +7,15 @@ import {
   RouterProvider,
 } from "@tanstack/solid-router";
 import { Home } from "~/pages/Home";
+import { TitleBar } from "~/components/TitleBar";
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <TitleBar />
+      <Outlet />
+    </>
+  ),
 });
 
 const homeRoute = createRoute({
