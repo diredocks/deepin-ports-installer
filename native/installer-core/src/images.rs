@@ -21,7 +21,7 @@ pub struct Image {
 }
 
 /// All images available for one device under a specific architecture.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ImageGroup {
     /// Architecture, e.g. `riscv`.
     pub arch: Arch,

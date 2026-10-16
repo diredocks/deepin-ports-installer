@@ -2,6 +2,7 @@ mod download;
 mod flash;
 mod identify;
 mod list;
+mod render;
 
 use anyhow::Result;
 
