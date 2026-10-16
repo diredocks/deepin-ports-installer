@@ -25,7 +25,7 @@ pub fn run(args: ImagesArgs) -> Result<()> {
 
     log::debug!("matched {} image group(s) of {}", groups.len(), index.len());
 
-    render::images(&groups, format)
+    render::images(&ImageIndex::from(groups), format)
 }
 
 /// Return `group` with its images filtered; `None` when no image matches.

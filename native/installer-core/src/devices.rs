@@ -84,6 +84,31 @@ impl DeviceIndex {
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
     }
+
+    /// Serialize the device groups as a pretty-printed JSON array.
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string_pretty(&self.groups)?)
+    }
+
+    /// Serialize the device groups back into the canonical `[[devices]]`
+    /// layout used by `devices.toml`.
+    pub fn to_toml(&self) -> Result<String> {
+        /// Wrapper used to emit the listing as a top-level TOML table.
+        #[derive(Serialize)]
+        struct Document<'a> {
+            devices: &'a [DeviceGroup],
+        }
+
+        Ok(toml::to_string_pretty(&Document {
+            devices: &self.groups,
+        })?)
+    }
+}
+
+impl From<Vec<DeviceGroup>> for DeviceIndex {
+    fn from(groups: Vec<DeviceGroup>) -> Self {
+        Self { groups }
+    }
 }
 
 impl<'a> IntoIterator for &'a DeviceIndex {
@@ -149,5 +174,25 @@ mod tests {
             DeviceIndex::parse("[[devices]"),
             Err(Error::Parse(_))
         ));
+    }
+
+    #[test]
+    fn to_toml_round_trips_devices_layout() {
+        let index = DeviceIndex::parse(SAMPLE).unwrap();
+        let rendered = index.to_toml().unwrap();
+
+        assert!(rendered.contains("[[devices]]"));
+        assert_eq!(DeviceIndex::parse(&rendered).unwrap(), index);
+    }
+
+    #[test]
+    fn to_json_emits_group_array() {
+        let index = DeviceIndex::parse(SAMPLE).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&index.to_json().unwrap()).unwrap();
+
+        let array = value.as_array().unwrap();
+        assert_eq!(array.len(), 2);
+        assert_eq!(array[0]["arch"], "riscv");
+        assert_eq!(array[0]["devices"][0], "visionfive-2");
     }
 }

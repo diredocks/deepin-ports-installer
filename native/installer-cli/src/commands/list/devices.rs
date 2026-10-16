@@ -11,10 +11,11 @@ pub fn run(args: DevicesArgs) -> Result<()> {
     let format = args.output.format;
     let arch = args.arch.arch;
 
-    let groups: Vec<&DeviceGroup> = index
+    let groups: Vec<DeviceGroup> = index
         .groups()
         .iter()
         .filter(|group| matches(group, arch, args.soc.as_deref(), args.device.as_deref()))
+        .cloned()
         .collect();
 
     log::debug!(
@@ -23,7 +24,7 @@ pub fn run(args: DevicesArgs) -> Result<()> {
         index.len()
     );
 
-    render::devices(&groups, format)
+    render::devices(&DeviceIndex::from(groups), format)
 }
 
 /// Whether `group` satisfies every provided filter.

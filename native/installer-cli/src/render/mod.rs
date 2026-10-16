@@ -2,57 +2,50 @@ mod size;
 mod table;
 
 use anyhow::Result;
-use installer_core::{DeviceGroup, ImageGroup};
-use serde::Serialize;
+use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
 
 use crate::cli::OutputFormat;
 
-/// Wrapper used to emit a device listing as a top-level TOML table.
-#[derive(Serialize)]
-struct DeviceDocument<'a> {
-    devices: &'a [&'a DeviceGroup],
-}
-
-/// Render a list of supported device groups.
-pub fn devices(groups: &[&DeviceGroup], format: OutputFormat) -> Result<()> {
+/// Render a device index.
+pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
     match format {
-        OutputFormat::Json => print_json(groups),
-        OutputFormat::Toml => print_toml(&DeviceDocument { devices: groups }),
+        OutputFormat::Json => {
+            print!("{}", index.to_json()?);
+            Ok(())
+        }
+        OutputFormat::Toml => {
+            print!("{}", index.to_toml()?);
+            Ok(())
+        }
         OutputFormat::Table => {
-            let rows = groups
-                .iter()
-                .map(|group| device_row(group))
-                .collect::<Vec<_>>();
+            let rows = index.groups().iter().map(device_row).collect::<Vec<_>>();
             table::print(&["ARCH", "SOC", "PLATFORM", "DEVICES"], &rows);
             Ok(())
         }
     }
 }
 
-/// Render a list of image groups.
-pub fn images(groups: &[ImageGroup], format: OutputFormat) -> Result<()> {
+/// Render an image index.
+pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
     match format {
-        OutputFormat::Json => print_json(groups),
+        OutputFormat::Json => {
+            print!("{}", index.to_json()?);
+            Ok(())
+        }
         OutputFormat::Toml => {
-            print!("{}", images_toml(groups)?);
+            print!("{}", index.to_toml()?);
             Ok(())
         }
         OutputFormat::Table => {
-            let rows = groups.iter().flat_map(image_rows).collect::<Vec<_>>();
+            let rows = index
+                .groups()
+                .iter()
+                .flat_map(image_rows)
+                .collect::<Vec<_>>();
             table::print(&["ARCH", "DEVICE", "VARIANT", "DATE", "SIZE"], &rows);
             Ok(())
         }
     }
-}
-
-fn print_json<T: Serialize + ?Sized>(value: &T) -> Result<()> {
-    println!("{}", serde_json::to_string_pretty(value)?);
-    Ok(())
-}
-
-fn print_toml<T: Serialize + ?Sized>(value: &T) -> Result<()> {
-    print!("{}", toml::to_string_pretty(value)?);
-    Ok(())
 }
 
 fn device_row(group: &DeviceGroup) -> Vec<String> {
@@ -74,30 +67,4 @@ fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
             size::human(image.size),
         ]
     })
-}
-
-/// Serialize image groups back into the canonical `[[<arch>.<device>]]` layout
-/// used by `images.toml`.
-fn images_toml(groups: &[ImageGroup]) -> Result<String> {
-    let mut root = toml::value::Table::new();
-
-    for group in groups {
-        let arch = root
-            .entry(group.arch.as_str().to_owned())
-            .or_insert_with(|| toml::Value::Table(toml::value::Table::new()));
-
-        let arch_table = arch
-            .as_table_mut()
-            .expect("architecture entry is always a table");
-
-        let images = group
-            .images
-            .iter()
-            .map(toml::Value::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        arch_table.insert(group.device.clone(), toml::Value::Array(images));
-    }
-
-    Ok(toml::to_string_pretty(&root)?)
 }

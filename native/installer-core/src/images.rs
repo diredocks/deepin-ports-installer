@@ -113,6 +113,43 @@ impl ImageIndex {
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
     }
+
+    /// Serialize the image groups as a pretty-printed JSON array.
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string_pretty(&self.groups)?)
+    }
+
+    /// Serialize the image groups back into the canonical
+    /// `[[<arch>.<device>]]` layout used by `images.toml`.
+    pub fn to_toml(&self) -> Result<String> {
+        let mut root = toml::value::Table::new();
+
+        for group in &self.groups {
+            let arch = root
+                .entry(group.arch.as_str().to_owned())
+                .or_insert_with(|| toml::Value::Table(toml::value::Table::new()));
+
+            let arch_table = arch
+                .as_table_mut()
+                .expect("architecture entry is always a table");
+
+            let images: Vec<toml::Value> = group
+                .images
+                .iter()
+                .map(toml::Value::try_from)
+                .collect::<std::result::Result<_, toml::ser::Error>>()?;
+
+            arch_table.insert(group.device.clone(), toml::Value::Array(images));
+        }
+
+        Ok(toml::to_string_pretty(&root)?)
+    }
+}
+
+impl From<Vec<ImageGroup>> for ImageIndex {
+    fn from(groups: Vec<ImageGroup>) -> Self {
+        Self { groups }
+    }
 }
 
 impl<'a> IntoIterator for &'a ImageIndex {
@@ -193,5 +230,30 @@ mod tests {
             ImageIndex::parse("[[riscv.jh7110]"),
             Err(Error::Parse(_))
         ));
+    }
+
+    #[test]
+    fn to_toml_round_trips_canonical_layout() {
+        let index = ImageIndex::parse(SAMPLE).unwrap();
+        let rendered = index.to_toml().unwrap();
+
+        assert!(rendered.contains("[[riscv.dp1000]]"));
+        assert!(rendered.contains("[[riscv.jh7110]]"));
+        assert!(rendered.contains("[[arm64.generic]]"));
+
+        assert_eq!(ImageIndex::parse(&rendered).unwrap(), index);
+    }
+
+    #[test]
+    fn to_json_emits_group_array() {
+        let index = ImageIndex::parse(SAMPLE).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&index.to_json().unwrap()).unwrap();
+
+        let array = value.as_array().unwrap();
+        assert_eq!(array.len(), 3);
+        assert_eq!(array[0]["arch"], "riscv");
+        assert_eq!(array[0]["device"], "dp1000");
+        assert_eq!(array[1]["device"], "jh7110");
+        assert_eq!(array[1]["images"].as_array().unwrap().len(), 2);
     }
 }

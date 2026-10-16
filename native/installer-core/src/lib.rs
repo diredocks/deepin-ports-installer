@@ -27,6 +27,14 @@ pub enum Error {
     #[error("unexpected TOML structure: {0}")]
     Shape(String),
 
+    /// Serializing an index to JSON failed.
+    #[error("failed to serialize JSON: {0}")]
+    SerializeJson(#[from] serde_json::Error),
+
+    /// Serializing an index to TOML failed.
+    #[error("failed to serialize TOML: {0}")]
+    SerializeToml(#[from] toml::ser::Error),
+
     /// An architecture slug is not one of the known values.
     #[error("unknown architecture `{0}`")]
     UnknownArch(String),

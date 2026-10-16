@@ -276,9 +276,6 @@ dependencies = [
  "env_logger",
  "installer-core",
  "log",
- "serde",
- "serde_json",
- "toml",
 ]
 
 [[package]]
@@ -287,6 +284,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "serde",
+ "serde_json",
  "thiserror",
  "toml",
 ]
