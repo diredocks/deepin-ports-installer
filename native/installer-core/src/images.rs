@@ -33,6 +33,9 @@ pub struct ImageGroup {
     pub images: Vec<Image>,
 }
 
+/// The `images.toml` bundled into the binary at compile time.
+const EMBEDDED_IMAGES: &str = include_str!("../assets/images.toml");
+
 /// Parsed contents of `images.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImageIndex {
@@ -84,6 +87,11 @@ impl ImageIndex {
             source,
         })?;
         Self::parse(&document)
+    }
+
+    /// Parse the `images.toml` bundled into the binary at compile time.
+    pub fn embedded() -> Result<Self> {
+        Self::parse(EMBEDDED_IMAGES)
     }
 
     /// All image groups, in file order.

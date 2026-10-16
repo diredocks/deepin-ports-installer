@@ -32,6 +32,9 @@ struct DevicesFile {
     devices: Vec<DeviceGroup>,
 }
 
+/// The `devices.toml` bundled into the binary at compile time.
+const EMBEDDED_DEVICES: &str = include_str!("../assets/devices.toml");
+
 /// Parsed contents of `devices.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DeviceIndex {
@@ -55,6 +58,11 @@ impl DeviceIndex {
             source,
         })?;
         Self::parse(&document)
+    }
+
+    /// Parse the `devices.toml` bundled into the binary at compile time.
+    pub fn embedded() -> Result<Self> {
+        Self::parse(EMBEDDED_DEVICES)
     }
 
     /// All device groups, in file order.
