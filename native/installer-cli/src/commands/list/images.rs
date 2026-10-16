@@ -1,10 +1,31 @@
 use anyhow::{Context, Result};
+use clap::Args;
 
 use installer_core::{Image, ImageGroup, ImageIndex};
 
 use super::filter::contains_ignore_case;
-use crate::cli::ImagesArgs;
+use crate::cli::{ArchArg, FormatArg, VariantArg};
 use crate::render;
+
+#[derive(Debug, Args)]
+pub struct ImagesArgs {
+    #[command(flatten)]
+    pub arch: ArchArg,
+
+    /// Filter by device model
+    #[arg(short, long, value_name = "DEVICE")]
+    pub device: Option<String>,
+
+    #[command(flatten)]
+    pub variant: VariantArg,
+
+    /// Only show the newest image of each group
+    #[arg(long)]
+    pub latest: bool,
+
+    #[command(flatten)]
+    pub output: FormatArg,
+}
 
 pub fn run(args: ImagesArgs) -> Result<()> {
     let index = ImageIndex::embedded().context("failed to load embedded image index")?;

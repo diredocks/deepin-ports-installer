@@ -1,7 +1,7 @@
-mod download;
-mod flash;
-mod identify;
-mod list;
+pub mod download;
+pub mod flash;
+pub mod identify;
+pub mod list;
 
 use anyhow::Result;
 

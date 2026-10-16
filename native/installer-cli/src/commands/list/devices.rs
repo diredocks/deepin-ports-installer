@@ -1,10 +1,28 @@
 use anyhow::{Context, Result};
+use clap::Args;
 
 use installer_core::{Arch, DeviceGroup, DeviceIndex};
 
 use super::filter::contains_ignore_case;
-use crate::cli::DevicesArgs;
+use crate::cli::{ArchArg, FormatArg};
 use crate::render;
+
+#[derive(Debug, Args)]
+pub struct DevicesArgs {
+    #[command(flatten)]
+    pub arch: ArchArg,
+
+    /// Filter by SoC
+    #[arg(short, long, value_name = "SOC")]
+    pub soc: Option<String>,
+
+    /// Filter by device model
+    #[arg(short, long, value_name = "DEVICE")]
+    pub device: Option<String>,
+
+    #[command(flatten)]
+    pub output: FormatArg,
+}
 
 pub fn run(args: DevicesArgs) -> Result<()> {
     let index = DeviceIndex::embedded().context("failed to load embedded device index")?;

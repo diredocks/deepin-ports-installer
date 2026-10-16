@@ -4,6 +4,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 pub use installer_core::Arch;
 
+use crate::commands::download::DownloadArgs;
+use crate::commands::flash::FlashArgs;
+use crate::commands::identify::IdentifyArgs;
+use crate::commands::list::ListArgs;
+
 /// CLI Installer for Deepin Ports images.
 ///
 /// Resolve, download and write a Deepin Ports image to a storage device
@@ -55,170 +60,6 @@ pub enum Command {
 
     /// Identify the currently connected device
     Identify(IdentifyArgs),
-}
-
-// --- list ---
-
-#[derive(Debug, Args)]
-pub struct ListArgs {
-    #[command(subcommand)]
-    pub kind: ListKind,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum ListKind {
-    /// List supported device models
-    Devices(DevicesArgs),
-
-    /// List available images
-    Images(ImagesArgs),
-
-    /// List local block devices usable as flash targets
-    Targets(TargetsArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct DevicesArgs {
-    #[command(flatten)]
-    pub arch: ArchArg,
-
-    /// Filter by SoC
-    #[arg(short, long, value_name = "SOC")]
-    pub soc: Option<String>,
-
-    /// Filter by device model
-    #[arg(short, long, value_name = "DEVICE")]
-    pub device: Option<String>,
-
-    #[command(flatten)]
-    pub output: FormatArg,
-}
-
-#[derive(Debug, Args)]
-pub struct ImagesArgs {
-    #[command(flatten)]
-    pub arch: ArchArg,
-
-    /// Filter by device model
-    #[arg(short, long, value_name = "DEVICE")]
-    pub device: Option<String>,
-
-    #[command(flatten)]
-    pub variant: VariantArg,
-
-    /// Only show the newest image of each group
-    #[arg(long)]
-    pub latest: bool,
-
-    #[command(flatten)]
-    pub output: FormatArg,
-}
-
-#[derive(Debug, Args)]
-pub struct TargetsArgs {
-    #[command(flatten)]
-    pub output: FormatArg,
-}
-
-// --- download ---
-
-#[derive(Debug, Args)]
-pub struct DownloadArgs {
-    /// Device model to resolve an image for
-    #[arg(value_name = "DEVICE")]
-    pub device: String,
-
-    #[command(flatten)]
-    pub arch: ArchArg,
-
-    #[command(flatten)]
-    pub variant: VariantArg,
-
-    /// Pick the newest matching image
-    #[arg(long, conflicts_with = "date")]
-    pub latest: bool,
-
-    /// Pick the image published on this date (YYYYMMDD)
-    #[arg(long, value_name = "YYYYMMDD")]
-    pub date: Option<String>,
-
-    /// Destination file or directory
-    #[arg(short, long, value_name = "PATH")]
-    pub output: Option<PathBuf>,
-
-    /// Overwrite an existing file
-    #[arg(long)]
-    pub force: bool,
-
-    #[command(flatten)]
-    pub cache: CacheArg,
-}
-
-// --- flash ---
-
-#[derive(Debug, Args)]
-pub struct FlashArgs {
-    /// Target block device to write to (e.g. /dev/sdX or /dev/mmcblk0)
-    #[arg(value_name = "TARGET")]
-    pub target: PathBuf,
-
-    #[command(flatten)]
-    pub source: ImageSource,
-
-    /// Do not ask for confirmation before writing
-    #[arg(short = 'y', long)]
-    pub yes: bool,
-
-    /// Verify the image checksum after writing
-    #[arg(long)]
-    pub verify: bool,
-
-    /// Print the planned actions without downloading or writing
-    #[arg(long)]
-    pub dry_run: bool,
-
-    /// Decompress the image while writing
-    #[arg(long)]
-    pub decompress: bool,
-}
-
-/// How the image to flash is chosen (exactly one source required).
-#[derive(Debug, Args)]
-#[command(group(
-    clap::ArgGroup::new("source")
-        .required(true)
-        .multiple(false)
-        .args(["device", "image", "url"])
-))]
-pub struct ImageSource {
-    /// Resolve and flash the latest image for this device model
-    #[arg(short, long, value_name = "DEVICE")]
-    pub device: Option<String>,
-
-    /// Use a local image file
-    #[arg(long, value_name = "PATH")]
-    pub image: Option<PathBuf>,
-
-    /// Use a remote image URL
-    #[arg(long, value_name = "URL")]
-    pub url: Option<String>,
-
-    #[command(flatten)]
-    pub arch: ArchArg,
-
-    #[command(flatten)]
-    pub variant: VariantArg,
-
-    #[command(flatten)]
-    pub cache: CacheArg,
-}
-
-// --- identify ---
-
-#[derive(Debug, Args)]
-pub struct IdentifyArgs {
-    #[command(flatten)]
-    pub output: FormatArg,
 }
 
 // --- reusable argument groups ---

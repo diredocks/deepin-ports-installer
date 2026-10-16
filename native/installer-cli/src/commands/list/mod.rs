@@ -1,11 +1,33 @@
-mod devices;
+pub mod devices;
+pub mod images;
+pub mod targets;
+
 mod filter;
-mod images;
-mod targets;
 
 use anyhow::Result;
+use clap::{Args, Subcommand};
 
-use crate::cli::{ListArgs, ListKind};
+use self::devices::DevicesArgs;
+use self::images::ImagesArgs;
+use self::targets::TargetsArgs;
+
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    #[command(subcommand)]
+    pub kind: ListKind,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ListKind {
+    /// List supported device models
+    Devices(DevicesArgs),
+
+    /// List available images
+    Images(ImagesArgs),
+
+    /// List local block devices usable as flash targets
+    Targets(TargetsArgs),
+}
 
 pub fn run(args: ListArgs) -> Result<()> {
     match args.kind {
