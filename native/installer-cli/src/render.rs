@@ -1,7 +1,6 @@
-mod size;
-mod table;
-
 use anyhow::Result;
+use comfy_table::{Cell, Table, presets};
+use humansize::{BINARY, format_size};
 use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
 
 use crate::cli::OutputFormat;
@@ -19,7 +18,7 @@ pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
         }
         OutputFormat::Table => {
             let rows = index.groups().iter().map(device_row).collect::<Vec<_>>();
-            table::print(&["ARCH", "SOC", "PLATFORM", "DEVICES"], &rows);
+            print_table(&["ARCH", "SOC", "PLATFORM", "DEVICES"], &rows);
             Ok(())
         }
     }
@@ -42,7 +41,7 @@ pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
                 .iter()
                 .flat_map(image_rows)
                 .collect::<Vec<_>>();
-            table::print(&["ARCH", "DEVICE", "VARIANT", "DATE", "SIZE"], &rows);
+            print_table(&["ARCH", "DEVICE", "VARIANT", "DATE", "SIZE"], &rows);
             Ok(())
         }
     }
@@ -64,7 +63,25 @@ fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
             group.device.clone(),
             image.variant.clone(),
             image.date.clone(),
-            size::human(image.size),
+            human_size(image.size),
         ]
     })
+}
+
+/// Format a byte count using binary units.
+fn human_size(bytes: u64) -> String {
+    format_size(bytes, BINARY.decimal_places(1))
+}
+
+/// Print a Markdown-style table with a header row.
+fn print_table(headers: &[&str], rows: &[Vec<String>]) {
+    let mut table = Table::new();
+    table.load_preset(presets::ASCII_MARKDOWN);
+
+    table.set_header(headers.iter().map(Cell::new));
+    for row in rows {
+        table.add_row(row.iter().map(Cell::new));
+    }
+
+    println!("{}", table.trim_fmt());
 }
