@@ -7,13 +7,13 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         "download: device={} arch={:?} variant={:?} latest={} date={:?} output={:?} \
          force={} cache_dir={:?}",
         args.device,
-        args.arch,
-        args.variant,
+        args.arch.arch,
+        args.variant.variant,
         args.latest,
         args.date,
         args.output,
         args.force,
-        args.cache_dir
+        args.cache.cache_dir
     );
 
     todo!("download image for device `{}`", args.device)

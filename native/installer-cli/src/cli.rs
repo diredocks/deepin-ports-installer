@@ -68,20 +68,19 @@ pub struct ListArgs {
 #[derive(Debug, Subcommand)]
 pub enum ListKind {
     /// List supported device models
-    Devices(DevicesFilter),
+    Devices(DevicesArgs),
 
     /// List available images
-    Images(ImagesFilter),
+    Images(ImagesArgs),
 
     /// List local block devices usable as flash targets
-    Targets(TargetsFilter),
+    Targets(TargetsArgs),
 }
 
 #[derive(Debug, Args)]
-pub struct DevicesFilter {
-    /// Filter by architecture
-    #[arg(short, long, value_enum)]
-    pub arch: Option<Arch>,
+pub struct DevicesArgs {
+    #[command(flatten)]
+    pub arch: ArchArg,
 
     /// Filter by SoC
     #[arg(short, long, value_name = "SOC")]
@@ -91,39 +90,34 @@ pub struct DevicesFilter {
     #[arg(short, long, value_name = "DEVICE")]
     pub device: Option<String>,
 
-    /// Output format
-    #[arg(short, long, value_enum, default_value_t)]
-    pub format: OutputFormat,
+    #[command(flatten)]
+    pub output: FormatArg,
 }
 
 #[derive(Debug, Args)]
-pub struct ImagesFilter {
-    /// Filter by architecture
-    #[arg(short, long, value_enum)]
-    pub arch: Option<Arch>,
+pub struct ImagesArgs {
+    #[command(flatten)]
+    pub arch: ArchArg,
 
     /// Filter by device model
     #[arg(short, long, value_name = "DEVICE")]
     pub device: Option<String>,
 
-    /// Filter by image variant (e.g. 25-crimson-preview)
-    #[arg(long, value_name = "VARIANT")]
-    pub variant: Option<String>,
+    #[command(flatten)]
+    pub variant: VariantArg,
 
     /// Only show the newest image of each group
     #[arg(long)]
     pub latest: bool,
 
-    /// Output format
-    #[arg(short, long, value_enum, default_value_t)]
-    pub format: OutputFormat,
+    #[command(flatten)]
+    pub output: FormatArg,
 }
 
 #[derive(Debug, Args)]
-pub struct TargetsFilter {
-    /// Output format
-    #[arg(short, long, value_enum, default_value_t)]
-    pub format: OutputFormat,
+pub struct TargetsArgs {
+    #[command(flatten)]
+    pub output: FormatArg,
 }
 
 // --- download ---
@@ -134,13 +128,11 @@ pub struct DownloadArgs {
     #[arg(value_name = "DEVICE")]
     pub device: String,
 
-    /// Filter by architecture
-    #[arg(short, long, value_enum)]
-    pub arch: Option<Arch>,
+    #[command(flatten)]
+    pub arch: ArchArg,
 
-    /// Filter by image variant (e.g. 25-crimson-preview)
-    #[arg(long, value_name = "VARIANT")]
-    pub variant: Option<String>,
+    #[command(flatten)]
+    pub variant: VariantArg,
 
     /// Pick the newest matching image
     #[arg(long, conflicts_with = "date")]
@@ -158,9 +150,8 @@ pub struct DownloadArgs {
     #[arg(long)]
     pub force: bool,
 
-    /// Directory used to cache downloaded images
-    #[arg(long, value_name = "DIR", env = "DEEPIN_PORTS_CACHE_DIR")]
-    pub cache_dir: Option<PathBuf>,
+    #[command(flatten)]
+    pub cache: CacheArg,
 }
 
 // --- flash ---
@@ -212,26 +203,56 @@ pub struct ImageSource {
     #[arg(long, value_name = "URL")]
     pub url: Option<String>,
 
-    /// Filter by architecture when resolving by device
-    #[arg(short, long, value_enum)]
-    pub arch: Option<Arch>,
+    #[command(flatten)]
+    pub arch: ArchArg,
 
-    /// Filter by image variant when resolving by device
-    #[arg(long, value_name = "VARIANT")]
-    pub variant: Option<String>,
+    #[command(flatten)]
+    pub variant: VariantArg,
 
-    /// Directory used to cache downloaded images
-    #[arg(long, value_name = "DIR", env = "DEEPIN_PORTS_CACHE_DIR")]
-    pub cache_dir: Option<PathBuf>,
+    #[command(flatten)]
+    pub cache: CacheArg,
 }
 
 // --- identify ---
 
 #[derive(Debug, Args)]
 pub struct IdentifyArgs {
+    #[command(flatten)]
+    pub output: FormatArg,
+}
+
+// --- reusable argument groups ---
+
+/// Architecture filter (`--arch`).
+#[derive(Debug, Args)]
+pub struct ArchArg {
+    /// Filter by architecture
+    #[arg(short, long, value_enum)]
+    pub arch: Option<Arch>,
+}
+
+/// Image variant filter (`--variant`).
+#[derive(Debug, Args)]
+pub struct VariantArg {
+    /// Filter by image variant (e.g. 25-crimson-preview)
+    #[arg(long, value_name = "VARIANT")]
+    pub variant: Option<String>,
+}
+
+/// Output format selector (`--format`).
+#[derive(Debug, Args)]
+pub struct FormatArg {
     /// Output format
     #[arg(short, long, value_enum, default_value_t)]
     pub format: OutputFormat,
+}
+
+/// Download cache selector (`--cache-dir`).
+#[derive(Debug, Args)]
+pub struct CacheArg {
+    /// Directory used to cache downloaded images
+    #[arg(long, value_name = "DIR", env = "DEEPIN_PORTS_CACHE_DIR")]
+    pub cache_dir: Option<PathBuf>,
 }
 
 // --- shared value types ---

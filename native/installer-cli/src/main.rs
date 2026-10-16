@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod render;
 
 use std::process::ExitCode;
 
