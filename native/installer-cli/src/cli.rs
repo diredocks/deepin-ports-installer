@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 
 pub use installer_core::Arch;
 
@@ -8,6 +8,8 @@ use crate::commands::download::DownloadArgs;
 use crate::commands::flash::FlashArgs;
 use crate::commands::identify::IdentifyArgs;
 use crate::commands::list::ListArgs;
+use crate::logging::LogLevel;
+use crate::render::OutputFormat;
 
 /// CLI Installer for Deepin Ports images.
 ///
@@ -94,35 +96,4 @@ pub struct CacheArg {
     /// Directory used to cache downloaded images
     #[arg(long, value_name = "DIR", env = "DEEPIN_PORTS_CACHE_DIR")]
     pub cache_dir: Option<PathBuf>,
-}
-
-// --- shared value types ---
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
-pub enum OutputFormat {
-    #[default]
-    Table,
-    Json,
-    Toml,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum LogLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
-}
-
-impl From<LogLevel> for log::LevelFilter {
-    fn from(level: LogLevel) -> Self {
-        match level {
-            LogLevel::Error => log::LevelFilter::Error,
-            LogLevel::Warn => log::LevelFilter::Warn,
-            LogLevel::Info => log::LevelFilter::Info,
-            LogLevel::Debug => log::LevelFilter::Debug,
-            LogLevel::Trace => log::LevelFilter::Trace,
-        }
-    }
 }

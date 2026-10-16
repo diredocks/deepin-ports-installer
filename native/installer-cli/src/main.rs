@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod logging;
 mod render;
 
 use std::process::ExitCode;
@@ -10,7 +11,7 @@ use crate::cli::Cli;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    commands::init_logging(&cli.global);
+    logging::init(&cli.global);
 
     match commands::run(cli) {
         Ok(()) => ExitCode::SUCCESS,

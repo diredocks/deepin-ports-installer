@@ -1,9 +1,17 @@
 use anyhow::Result;
+use clap::ValueEnum;
 use comfy_table::{Cell, Table, presets};
 use humansize::{BINARY, format_size};
 use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
 
-use crate::cli::OutputFormat;
+/// Output format selector (`--format`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum OutputFormat {
+    #[default]
+    Table,
+    Json,
+    Toml,
+}
 
 /// Render a device index.
 pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
@@ -63,14 +71,9 @@ fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
             group.device.clone(),
             image.variant.clone(),
             image.date.clone(),
-            human_size(image.size),
+            format_size(image.size, BINARY.decimal_places(1)),
         ]
     })
-}
-
-/// Format a byte count using binary units.
-fn human_size(bytes: u64) -> String {
-    format_size(bytes, BINARY.decimal_places(1))
 }
 
 /// Print a Markdown-style table with a header row.
