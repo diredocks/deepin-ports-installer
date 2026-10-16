@@ -26,18 +26,6 @@ pub fn devices(groups: &[&DeviceGroup], format: OutputFormat) -> Result<()> {
             table::print(&["ARCH", "SOC", "PLATFORM", "DEVICES"], &rows);
             Ok(())
         }
-        OutputFormat::Plain => {
-            for group in groups {
-                println!(
-                    "{}\t{}\t{}\t{}",
-                    group.arch,
-                    group.soc,
-                    group.platform,
-                    group.devices.join(",")
-                );
-            }
-            Ok(())
-        }
     }
 }
 
@@ -52,17 +40,6 @@ pub fn images(groups: &[ImageGroup], format: OutputFormat) -> Result<()> {
         OutputFormat::Table => {
             let rows = groups.iter().flat_map(image_rows).collect::<Vec<_>>();
             table::print(&["ARCH", "DEVICE", "VARIANT", "DATE", "SIZE"], &rows);
-            Ok(())
-        }
-        OutputFormat::Plain => {
-            for group in groups {
-                for image in &group.images {
-                    println!(
-                        "{}\t{}\t{}\t{}\t{}\t{}",
-                        group.arch, group.device, image.variant, image.size, image.date, image.link
-                    );
-                }
-            }
             Ok(())
         }
     }

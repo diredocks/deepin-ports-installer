@@ -263,7 +263,6 @@ pub enum OutputFormat {
     Table,
     Json,
     Toml,
-    Plain,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
