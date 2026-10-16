@@ -1,0 +1,11 @@
+[package]
+name = "installer-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "deepin-ports-installer-cli"
+path = "src/main.rs"
+
+[dependencies]
+installer-core = { path = "../installer-core" }
