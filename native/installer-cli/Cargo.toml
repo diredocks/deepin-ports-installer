@@ -8,7 +8,7 @@ name = "deepin-ports-installer-cli"
 path = "src/main.rs"
 
 [dependencies]
-installer-core = { path = "../installer-core" }
+installer-core = { path = "../installer-core", features = ["cli"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 env_logger = "0.11"

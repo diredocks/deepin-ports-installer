@@ -3,4 +3,12 @@ name = "installer-core"
 version.workspace = true
 edition.workspace = true
 
+[features]
+# Derive `clap::ValueEnum` for shared value types such as `Arch`.
+cli = ["dep:clap"]
+
 [dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+toml = { version = "1", features = ["preserve_order"] }

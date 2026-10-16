@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+pub use installer_core::Arch;
+
 /// CLI Installer for Deepin Ports images.
 ///
 /// Resolve, download and write a Deepin Ports image to a storage device
@@ -233,14 +235,6 @@ pub struct IdentifyArgs {
 }
 
 // --- shared value types ---
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum Arch {
-    Riscv,
-    Arm64,
-    Amd64,
-    Loong64,
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
