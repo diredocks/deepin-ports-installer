@@ -3,16 +3,13 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Args;
 
-use crate::cli::{ArchArg, CacheArg, VariantArg};
+use crate::cli::{CacheArg, VariantArg};
 
 #[derive(Debug, Args)]
 pub struct DownloadArgs {
     /// Device model to resolve an image for
     #[arg(value_name = "DEVICE")]
     pub device: String,
-
-    #[command(flatten)]
-    pub arch: ArchArg,
 
     #[command(flatten)]
     pub variant: VariantArg,
@@ -39,10 +36,9 @@ pub struct DownloadArgs {
 
 pub fn run(args: DownloadArgs) -> Result<()> {
     log::debug!(
-        "download: device={} arch={:?} variant={:?} latest={} date={:?} output={:?} \
+        "download: device={} variant={:?} latest={} date={:?} output={:?} \
          force={} cache_dir={:?}",
         args.device,
-        args.arch.arch,
         args.variant.variant,
         args.latest,
         args.date,

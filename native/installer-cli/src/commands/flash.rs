@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Args;
 
-use crate::cli::{ArchArg, CacheArg, VariantArg};
+use crate::cli::{CacheArg, VariantArg};
 
 #[derive(Debug, Args)]
 pub struct FlashArgs {
@@ -51,9 +51,6 @@ pub struct ImageSource {
     /// Use a remote image URL
     #[arg(long, value_name = "URL")]
     pub url: Option<String>,
-
-    #[command(flatten)]
-    pub arch: ArchArg,
 
     #[command(flatten)]
     pub variant: VariantArg,
