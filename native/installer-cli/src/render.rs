@@ -26,7 +26,7 @@ pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
         }
         OutputFormat::Table => {
             let rows = index.groups().iter().map(device_row).collect::<Vec<_>>();
-            print_table(&["ARCH", "SOC", "PLATFORM", "DEVICES"], &rows);
+            print_table(&["Arch", "SOC", "Platform", "Devices"], &rows);
             Ok(())
         }
     }
@@ -49,7 +49,7 @@ pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
                 .iter()
                 .flat_map(image_rows)
                 .collect::<Vec<_>>();
-            print_table(&["ARCH", "DEVICE", "VARIANT", "DATE", "SIZE"], &rows);
+            print_table(&["Arch", "Device", "Variant", "Date", "Size"], &rows);
             Ok(())
         }
     }
