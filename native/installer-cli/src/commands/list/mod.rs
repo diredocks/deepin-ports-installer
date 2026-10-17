@@ -2,8 +2,6 @@ pub mod devices;
 pub mod images;
 pub mod targets;
 
-mod filter;
-
 use anyhow::Result;
 use clap::{Args, Subcommand};
 

@@ -39,8 +39,9 @@ fn build() -> Result<Client> {
         .map_err(Error::HttpClient)
 }
 
-/// Fetch `url` with the shared client and return its body as text.
-pub async fn get(url: &str) -> Result<String> {
+/// Fetch `url` with the shared client, returning a response with a success
+/// status.
+pub async fn response(url: &str) -> Result<reqwest::Response> {
     let response = client()?
         .get(url)
         .send()
@@ -58,8 +59,17 @@ pub async fn get(url: &str) -> Result<String> {
         });
     }
 
-    response.text().await.map_err(|source| Error::Request {
-        url: url.to_owned(),
-        source,
-    })
+    Ok(response)
+}
+
+/// Fetch `url` with the shared client and return its body as text.
+pub async fn get(url: &str) -> Result<String> {
+    response(url)
+        .await?
+        .text()
+        .await
+        .map_err(|source| Error::Request {
+            url: url.to_owned(),
+            source,
+        })
 }

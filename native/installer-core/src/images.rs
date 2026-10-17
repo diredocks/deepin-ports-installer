@@ -30,7 +30,7 @@ pub struct ImageGroup {
     /// Device/SoC slug, e.g. `jh7110`.
     pub device: String,
 
-    /// Images for this device, in file order.
+    /// Images for this device, sorted by `date` ascending.
     pub images: Vec<Image>,
 }
 
@@ -53,7 +53,7 @@ impl ImageIndex {
     pub fn parse(document: &str) -> Result<Self> {
         let parsed: BTreeMap<Arch, BTreeMap<String, Vec<Image>>> = toml::from_str(document)?;
 
-        let groups = parsed
+        let groups: Vec<ImageGroup> = parsed
             .into_iter()
             .flat_map(|(arch, devices)| {
                 devices.into_iter().map(move |(device, images)| ImageGroup {
@@ -64,7 +64,7 @@ impl ImageIndex {
             })
             .collect();
 
-        Ok(Self { groups })
+        Ok(Self::from(groups))
     }
 
     /// Read and parse an `images.toml` file.
@@ -135,7 +135,12 @@ impl ImageIndex {
 }
 
 impl From<Vec<ImageGroup>> for ImageIndex {
-    fn from(groups: Vec<ImageGroup>) -> Self {
+    /// Groups are kept as given; each group's images are sorted by `date` so
+    /// the newest image is always last.
+    fn from(mut groups: Vec<ImageGroup>) -> Self {
+        for group in &mut groups {
+            group.images.sort_by(|a, b| a.date.cmp(&b.date));
+        }
         Self { groups }
     }
 }
@@ -204,6 +209,35 @@ mod tests {
         assert_eq!(jh7110.images[0].size, 3010718680);
         assert_eq!(jh7110.images[0].date, "20240805-110418");
         assert_eq!(jh7110.images[1].variant, "25-crimson-preview");
+    }
+
+    #[test]
+    fn images_are_sorted_by_date() {
+        let index = ImageIndex::from(vec![ImageGroup {
+            arch: Arch::Riscv,
+            device: "jh7110".to_owned(),
+            images: vec![
+                Image {
+                    variant: "new".to_owned(),
+                    size: 2,
+                    date: "20250603-113217".to_owned(),
+                    link: "https://example.com/new.tar.xz".to_owned(),
+                },
+                Image {
+                    variant: "old".to_owned(),
+                    size: 1,
+                    date: "20240805-110418".to_owned(),
+                    link: "https://example.com/old.tar.xz".to_owned(),
+                },
+            ],
+        }]);
+
+        let variants: Vec<&str> = index.groups()[0]
+            .images
+            .iter()
+            .map(|image| image.variant.as_str())
+            .collect();
+        assert_eq!(variants, ["old", "new"]);
     }
 
     #[test]

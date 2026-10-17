@@ -151,26 +151,26 @@ struct Entry {
 ///
 /// Every listing line is `<a href="name">…</a> … <date> <time> <size>`: the
 /// anchor `href` carries the full name (the link text is truncated) and the
-/// trailing token of the same line carries the size. Both are in source order,
-/// so the anchors can be zipped with the `<pre>` text lines.
+/// trailing token of the same line carries the size. Both are in source order
+/// within the `<pre>` listing, so its anchors can be zipped with its text lines.
 fn parse_index(html: &str) -> Result<Vec<Entry>> {
     let document = Document::parse(html)?;
 
-    let names = document
-        .elements()
+    let Some(pre) = document.elements().find(|element| element.is("pre")) else {
+        return Ok(Vec::new());
+    };
+
+    let names = pre
+        .descendants()
         .filter(|element| element.is("a"))
         .filter_map(|element| element.attribute("href"))
-        .map(|href| href.value.to_string());
+        .map(|href| href.value());
 
-    let listing = document
-        .elements()
-        .find(|element| element.is("pre"))
-        .map(|pre| pre.text().into_owned())
-        .unwrap_or_default();
+    let listing = pre.text();
 
     Ok(names
         .zip(listing.lines())
-        .filter(|(name, _)| name != "../")
+        .filter(|(name, _)| *name != "../")
         .map(|(name, line)| Entry {
             dir: name.ends_with('/'),
             size: line
@@ -178,18 +178,19 @@ fn parse_index(html: &str) -> Result<Vec<Entry>> {
                 .last()
                 .and_then(|token| token.parse().ok())
                 .unwrap_or(0),
-            name,
+            name: name.to_owned(),
         })
         .collect())
 }
 
 /// Whether a listing entry is a `YYYYMMDD/` build directory.
 fn is_date_dir(entry: &Entry) -> bool {
-    let name = &entry.name;
-    entry.dir
-        && name.len() == 9
-        && name.starts_with("20")
-        && name[..8].bytes().all(|byte| byte.is_ascii_digit())
+    entry.dir && entry.name.strip_suffix('/').is_some_and(is_day)
+}
+
+/// Whether `token` is exactly eight digits forming a plausible `YYYYMMDD`.
+fn is_day(token: &str) -> bool {
+    token.len() == 8 && token.starts_with("20") && token.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 /// Map a repository architecture directory to a supported [`Arch`].
@@ -269,17 +270,24 @@ fn device_from(parts: &[&str]) -> String {
 }
 
 /// Extract the `YYYYMMDD-HHMMSS` timestamp embedded in a file stem.
+///
+/// The stem is split on `-` and scanned for a day token immediately followed by
+/// a six-digit time token; trailing suffixes such as `_kernel-6.7` are ignored.
 fn extract_date(stem: &str) -> String {
-    stem.as_bytes()
-        .windows(15)
-        .find(|window| {
-            window.starts_with(b"20")
-                && window[8] == b'-'
-                && window[..8].iter().all(u8::is_ascii_digit)
-                && window[9..].iter().all(u8::is_ascii_digit)
+    let tokens: Vec<&str> = stem.split('-').collect();
+
+    tokens
+        .windows(2)
+        .find_map(|pair| {
+            let time = pair[1].split('_').next().unwrap_or(pair[1]);
+            (is_day(pair[0]) && is_time(time)).then(|| format!("{}-{time}", pair[0]))
         })
-        .map(|window| String::from_utf8_lossy(window).into_owned())
         .unwrap_or_default()
+}
+
+/// Whether `token` is exactly six digits forming a `HHMMSS` time.
+fn is_time(token: &str) -> bool {
+    token.len() == 6 && token.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 #[cfg(test)]

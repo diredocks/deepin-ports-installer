@@ -6,6 +6,7 @@ pub mod generate;
 pub mod http;
 pub mod images;
 pub mod paths;
+pub mod text;
 
 pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex};
