@@ -41,31 +41,27 @@ impl Default for Options {
 
 /// Crawl the repository configured by `options` and build an image index.
 pub async fn image_index(options: &Options) -> Result<ImageIndex> {
-    let client = http::client()?;
     let base = options.base.trim_end_matches('/');
     let concurrency = options.concurrency.max(1);
 
-    let dates: Vec<String> = parse_index(&http::get(&client, &format!("{base}/")).await?)?
+    let dates: Vec<String> = parse_index(&http::get(&format!("{base}/")).await?)?
         .into_iter()
         .filter(is_date_dir)
         .map(|entry| entry.name)
         .collect();
 
     let arch_lists: Vec<(String, Vec<(Arch, String)>)> = stream::iter(dates)
-        .map(|date| {
-            let client = client.clone();
-            async move {
-                let entries = parse_index(&http::get(&client, &format!("{base}/{date}")).await?)?;
-                let archs = entries
-                    .into_iter()
-                    .filter(|entry| entry.dir && entry.name != "../")
-                    .filter_map(|entry| {
-                        let dir = entry.name.trim_end_matches('/').to_owned();
-                        arch_from_dir(&dir).map(|arch| (arch, dir))
-                    })
-                    .collect();
-                Ok::<_, Error>((date, archs))
-            }
+        .map(|date| async move {
+            let entries = parse_index(&http::get(&format!("{base}/{date}")).await?)?;
+            let archs = entries
+                .into_iter()
+                .filter(|entry| entry.dir && entry.name != "../")
+                .filter_map(|entry| {
+                    let dir = entry.name.trim_end_matches('/').to_owned();
+                    arch_from_dir(&dir).map(|arch| (arch, dir))
+                })
+                .collect();
+            Ok::<_, Error>((date, archs))
         })
         .buffer_unordered(concurrency)
         .try_collect()
@@ -81,18 +77,14 @@ pub async fn image_index(options: &Options) -> Result<ImageIndex> {
         .collect();
 
     let mut records: Vec<Record> = stream::iter(jobs)
-        .map(|(date, arch, dir)| {
-            let client = client.clone();
-            async move {
-                let entries =
-                    parse_index(&http::get(&client, &format!("{base}/{date}{dir}/")).await?)?;
-                Ok::<_, Error>(
-                    entries
-                        .iter()
-                        .filter_map(|entry| record_from(base, arch, &date, &dir, entry))
-                        .collect::<Vec<_>>(),
-                )
-            }
+        .map(|(date, arch, dir)| async move {
+            let entries = parse_index(&http::get(&format!("{base}/{date}{dir}/")).await?)?;
+            Ok::<_, Error>(
+                entries
+                    .iter()
+                    .filter_map(|entry| record_from(base, arch, &date, &dir, entry))
+                    .collect::<Vec<_>>(),
+            )
         })
         .buffer_unordered(concurrency)
         .try_collect::<Vec<Vec<Record>>>()
