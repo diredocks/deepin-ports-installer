@@ -5,6 +5,7 @@ pub mod generate;
 #[cfg(feature = "http")]
 pub mod http;
 pub mod images;
+pub mod paths;
 
 pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex};
@@ -46,6 +47,10 @@ pub enum Error {
     /// An architecture slug is not one of the known values.
     #[error("unknown architecture `{0}`")]
     UnknownArch(String),
+
+    /// The platform application directories could not be determined.
+    #[error("failed to determine the platform application directories")]
+    ProjectDirs,
 
     /// Building the HTTP client used to crawl the image repository failed.
     #[cfg(feature = "http")]
