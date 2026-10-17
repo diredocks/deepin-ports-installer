@@ -1,7 +1,5 @@
-//! Stream a remote file to a local path.
-//!
-//! Resolving a query to a single image lives in [`crate::images`]; this module
-//! downloads any URL, resuming an interrupted transfer when possible.
+//! Stream a remote file to a local path, resuming an interrupted transfer when
+//! the server supports HTTP `Range` requests.
 
 use std::path::{Path, PathBuf};
 
@@ -175,7 +173,7 @@ async fn reconcile(
             let response = crate::http::response_from(url, 0).await?;
             ensure_success(response, url).map(|response| (response, 0))
         }
-        // The server ignored the range and sent the whole image; reuse its body.
+        // The server ignored the range and sent the whole file; reuse its body.
         status if status.is_success() => Ok((response, 0)),
         status => Err(Error::HttpStatus {
             url: url.to_owned(),
