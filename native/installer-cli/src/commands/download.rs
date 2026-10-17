@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 use humansize::{BINARY, format_size};
+use indicatif::{ProgressBar, ProgressStyle};
 use installer_core::download::{self, Progress, Query};
 use installer_core::{DeviceIndex, ImageIndex};
 
@@ -57,16 +58,23 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         dest.display()
     );
 
+    let bar = download_bar(image.size);
     let mut last = 0;
-    let progress = move |progress: Progress| {
-        let Some(total) = progress.total.filter(|total| *total > 0) else {
-            return;
-        };
 
-        let percent = progress.downloaded.saturating_mul(100) / total;
-        if percent >= last + 10 {
-            last = percent;
-            log::info!("{percent}%");
+    let progress = |progress: Progress| {
+        if let Some(total) = progress.total {
+            bar.set_length(total);
+        }
+        bar.set_position(progress.downloaded);
+
+        if bar.is_hidden()
+            && let Some(total) = progress.total.filter(|total| *total > 0)
+        {
+            let percent = progress.downloaded.saturating_mul(100) / total;
+            if percent >= last + 10 {
+                last = percent;
+                log::info!("{percent}%");
+            }
         }
     };
 
@@ -75,7 +83,23 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         .block_on(download::download(&image, &dest, args.force, progress))
         .context("failed to download image")?;
 
+    bar.finish_and_clear();
+
     log::info!("wrote {}", dest.display());
 
     Ok(())
+}
+
+/// A progress bar tracking a download of `total` bytes on stderr.
+fn download_bar(total: u64) -> ProgressBar {
+    let bar = ProgressBar::new(total);
+    bar.set_style(
+        ProgressStyle::with_template(
+            "{msg} [{bar:40}] {bytes}/{total_bytes} ({percent}%) {bytes_per_sec} ETA {eta}",
+        )
+        .expect("progress template is valid")
+        .progress_chars("#>-"),
+    );
+    bar.set_message("downloading");
+    bar
 }
