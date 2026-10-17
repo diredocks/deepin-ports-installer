@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Args;
 
-use crate::cli::{CacheArg, VariantArg};
+use crate::cli::VariantArg;
 
 #[derive(Debug, Args)]
 pub struct FlashArgs {
@@ -54,9 +54,6 @@ pub struct ImageSource {
 
     #[command(flatten)]
     pub variant: VariantArg,
-
-    #[command(flatten)]
-    pub cache: CacheArg,
 }
 
 pub fn run(args: FlashArgs) -> Result<()> {

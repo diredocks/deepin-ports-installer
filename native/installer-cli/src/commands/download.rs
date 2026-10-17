@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Args;
 
-use crate::cli::{CacheArg, VariantArg};
+use crate::cli::VariantArg;
 
 #[derive(Debug, Args)]
 pub struct DownloadArgs {
@@ -29,22 +29,17 @@ pub struct DownloadArgs {
     /// Overwrite an existing file
     #[arg(long)]
     pub force: bool,
-
-    #[command(flatten)]
-    pub cache: CacheArg,
 }
 
 pub fn run(args: DownloadArgs) -> Result<()> {
     log::debug!(
-        "download: device={} variant={:?} latest={} date={:?} output={:?} \
-         force={} cache_dir={:?}",
+        "download: device={} variant={:?} latest={} date={:?} output={:?} force={}",
         args.device,
         args.variant.variant,
         args.latest,
         args.date,
         args.output,
-        args.force,
-        args.cache.cache_dir
+        args.force
     );
 
     todo!("download image for device `{}`", args.device)

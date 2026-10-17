@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::{Args, Parser, Subcommand};
 
 pub use installer_core::Arch;
@@ -92,12 +90,4 @@ pub struct FormatArg {
     /// Output format
     #[arg(short, long, value_enum, default_value_t)]
     pub format: OutputFormat,
-}
-
-/// Download cache selector (`--cache-dir`).
-#[derive(Debug, Args)]
-pub struct CacheArg {
-    /// Directory used to cache downloaded images
-    #[arg(long, value_name = "DIR", env = "DEEPIN_PORTS_CACHE_DIR")]
-    pub cache_dir: Option<PathBuf>,
 }
