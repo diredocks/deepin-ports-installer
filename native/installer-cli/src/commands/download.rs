@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 use humansize::{BINARY, format_size};
-use indicatif::{ProgressBar, ProgressStyle};
 use installer_core::date;
 use installer_core::download::{self, Progress, Query};
 use installer_core::{DeviceIndex, ImageIndex};
 
 use crate::cli::{ArchArg, VariantArg};
+use crate::render;
 
 #[derive(Debug, Args)]
 pub struct DownloadArgs {
@@ -60,7 +60,7 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         dest.display()
     );
 
-    let bar = download_bar(image.size);
+    let bar = render::download_bar(image.size);
     let mut last = 0;
 
     let progress = |progress: Progress| {
@@ -90,18 +90,4 @@ pub fn run(args: DownloadArgs) -> Result<()> {
     log::info!("wrote {}", dest.display());
 
     Ok(())
-}
-
-/// A progress bar tracking a download of `total` bytes on stderr.
-fn download_bar(total: u64) -> ProgressBar {
-    let bar = ProgressBar::new(total);
-    bar.set_style(
-        ProgressStyle::with_template(
-            "{msg} [{bar:40}] {bytes}/{total_bytes} ({percent}%) {bytes_per_sec} ETA {eta}",
-        )
-        .expect("progress template is valid")
-        .progress_chars("#>-"),
-    );
-    bar.set_message("downloading");
-    bar
 }

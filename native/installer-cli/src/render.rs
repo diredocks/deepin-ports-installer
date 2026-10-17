@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
 use humansize::{BINARY, format_size};
+use indicatif::{ProgressBar, ProgressStyle};
 use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
 
 /// Output format selector (`--format`).
@@ -88,4 +89,18 @@ fn print_table(headers: &[&str], rows: &[Vec<String>]) {
     }
 
     println!("{}", table.trim_fmt());
+}
+
+/// A progress bar tracking a download of `total` bytes on stderr.
+pub fn download_bar(total: u64) -> ProgressBar {
+    let bar = ProgressBar::new(total);
+    bar.set_style(
+        ProgressStyle::with_template(
+            "{msg} [{bar:40}] {bytes}/{total_bytes} ({percent}%) {bytes_per_sec} ETA {eta}",
+        )
+        .expect("progress template is valid")
+        .progress_chars("#>-"),
+    );
+    bar.set_message("downloading");
+    bar
 }
