@@ -60,6 +60,14 @@ pub fn ensure_config(override_dir: Option<&Path>) -> Result<PathBuf> {
     create_dir(resolve_config(override_dir)?)
 }
 
+/// Whether `path` refers to a directory.
+///
+/// An existing directory matches, as does any path with a trailing separator,
+/// even one that does not exist yet.
+pub fn is_directory(path: &Path) -> bool {
+    path.is_dir() || path.to_string_lossy().ends_with(['/', '\\'])
+}
+
 /// Derive [`ProjectDirs`] for this application.
 fn project_dirs() -> Result<ProjectDirs> {
     ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION).ok_or(Error::ProjectDirs)

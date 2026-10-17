@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use url::Url;
 
+use crate::paths;
 use crate::text::contains_ignore_case;
 use crate::{Arch, DeviceIndex, Error, Image, ImageGroup, ImageIndex, Result};
 
@@ -106,8 +107,8 @@ pub fn destination(output: Option<&Path>, image: &Image) -> Result<PathBuf> {
         file_name(&image.link).ok_or_else(|| Error::LinkFileName(image.link.clone()))?;
 
     match output {
-        None => Ok(crate::paths::cache_dir()?.join("images").join(file_name)),
-        Some(path) if is_directory(path) => Ok(path.join(file_name)),
+        None => Ok(paths::cache_dir()?.join("images").join(file_name)),
+        Some(path) if paths::is_directory(path) => Ok(path.join(file_name)),
         Some(path) => Ok(path.to_path_buf()),
     }
 }
@@ -246,11 +247,6 @@ fn normalize(value: &str) -> String {
         .filter(char::is_ascii_alphanumeric)
         .map(|character| character.to_ascii_lowercase())
         .collect()
-}
-
-/// Whether `path` refers to a directory.
-fn is_directory(path: &Path) -> bool {
-    path.is_dir() || path.to_string_lossy().ends_with(['/', '\\'])
 }
 
 /// The final path segment of a link, ignoring any query or fragment.
@@ -503,7 +499,7 @@ mod tests {
 
         assert_eq!(
             destination(None, &sample).unwrap(),
-            crate::paths::cache_dir()
+            paths::cache_dir()
                 .unwrap()
                 .join("images")
                 .join("deepin-25-crimson-preview-riscv64-k1-20250101-000000.tar.xz")
