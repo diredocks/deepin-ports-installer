@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::ValueEnum;
-use comfy_table::{Cell, Table, presets};
+use comfy_table::{Cell, ContentArrangement, Table, presets};
 use humansize::{BINARY, format_size};
 use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
 
@@ -80,6 +80,7 @@ fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
 fn print_table(headers: &[&str], rows: &[Vec<String>]) {
     let mut table = Table::new();
     table.load_preset(presets::ASCII_MARKDOWN);
+    table.set_content_arrangement(ContentArrangement::Dynamic);
 
     table.set_header(headers.iter().map(Cell::new));
     for row in rows {

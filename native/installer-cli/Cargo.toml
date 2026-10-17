@@ -11,7 +11,7 @@ path = "src/main.rs"
 installer-core = { path = "../installer-core", features = ["cli"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
-comfy-table = "7"
+comfy-table = { version = "7", features = ["tty"] }
 env_logger = "0.11"
 humansize = "2"
 log = "0.4"
