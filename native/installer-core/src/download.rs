@@ -125,8 +125,10 @@ pub struct Progress {
 /// Download `image` to `dest`, calling `progress` as data arrives.
 ///
 /// The body is streamed to a temporary sibling of `dest` and moved into place
-/// once complete, so `dest` never holds a partial image. Unless `force` is set,
-/// an existing `dest` is refused.
+/// once complete, so `dest` never holds a partial image. An interrupted
+/// download leaves that sibling behind; a later call resumes it with an HTTP
+/// `Range` request instead of starting over. Unless `force` is set, an existing
+/// `dest` is refused.
 #[cfg(feature = "http")]
 pub async fn download<F>(image: &Image, dest: &Path, force: bool, mut progress: F) -> Result<()>
 where
@@ -148,36 +150,64 @@ where
         })?;
     }
 
-    let response = crate::http::response(&image.link).await?;
-    let total = response.content_length().or(Some(image.size));
-
     let temp = temp_path(dest);
-    let mut file = std::fs::File::create(&temp).map_err(|source| Error::Write {
-        path: temp.clone(),
-        source,
-    })?;
+    let expected = (image.size > 0).then_some(image.size);
 
-    if let Err(error) = write_body(
+    // Resume wherever a previous run stopped, unless the leftover is already
+    // as large as the image we expect (a stale partial from another build).
+    let mut offset = partial_size(&temp);
+    if expected.is_some_and(|total| offset >= total) {
+        let _ = std::fs::remove_file(&temp);
+        offset = 0;
+    }
+
+    let response = crate::http::response_from(&image.link, offset).await?;
+    let (response, offset) = reconcile(response, &image.link, &temp, offset).await?;
+
+    let total = response
+        .content_length()
+        .map(|length| length + offset)
+        .or(expected);
+
+    let mut file = open_partial(&temp, offset)?;
+    progress(Progress {
+        downloaded: offset,
+        total,
+    });
+
+    let written = match write_body(
         &mut file,
         response,
         &temp,
         &image.link,
+        offset,
         total,
         &mut progress,
     )
     .await
     {
-        drop(file);
-        let _ = std::fs::remove_file(&temp);
-        return Err(error);
-    }
+        Ok(written) => written,
+        Err(error) => {
+            let _ = std::io::Write::flush(&mut file);
+            return Err(error);
+        }
+    };
 
     if let Err(source) = std::io::Write::flush(&mut file) {
         drop(file);
-        let _ = std::fs::remove_file(&temp);
         return Err(Error::Write { path: temp, source });
     }
     drop(file);
+
+    if let Some(expected) = expected
+        && written < expected
+    {
+        return Err(Error::Incomplete {
+            url: image.link.clone(),
+            downloaded: written,
+            expected,
+        });
+    }
 
     if force && dest.exists() {
         std::fs::remove_file(dest).map_err(|source| Error::Write {
@@ -194,22 +224,128 @@ where
     Ok(())
 }
 
+/// Reconcile a possibly-ranged response with the offset we asked to resume
+/// from, returning the response to stream and the offset its body starts at.
+///
+/// A server that ignores the range, or reports it unsatisfiable, is handled by
+/// restarting from the beginning so the resulting file is always contiguous.
+#[cfg(feature = "http")]
+async fn reconcile(
+    response: reqwest::Response,
+    url: &str,
+    temp: &Path,
+    offset: u64,
+) -> Result<(reqwest::Response, u64)> {
+    use reqwest::StatusCode;
+
+    if offset == 0 {
+        return ensure_success(response, url).map(|response| (response, 0));
+    }
+
+    match response.status() {
+        // A genuine resume: the body starts exactly where the part file ends.
+        StatusCode::PARTIAL_CONTENT if content_range_start(&response) == Some(offset) => {
+            Ok((response, offset))
+        }
+        // A partial response we cannot place, or a range the server refuses:
+        // drop the part file and fetch the whole image again.
+        StatusCode::PARTIAL_CONTENT | StatusCode::RANGE_NOT_SATISFIABLE => {
+            let _ = std::fs::remove_file(temp);
+            let response = crate::http::response_from(url, 0).await?;
+            ensure_success(response, url).map(|response| (response, 0))
+        }
+        // The server ignored the range and sent the whole image; reuse its body.
+        status if status.is_success() => Ok((response, 0)),
+        status => Err(Error::HttpStatus {
+            url: url.to_owned(),
+            status,
+        }),
+    }
+}
+
+/// Return `response` unchanged when it has a success status, or the matching
+/// [`Error::HttpStatus`] otherwise.
+#[cfg(feature = "http")]
+fn ensure_success(response: reqwest::Response, url: &str) -> Result<reqwest::Response> {
+    let status = response.status();
+    if status.is_success() {
+        Ok(response)
+    } else {
+        Err(Error::HttpStatus {
+            url: url.to_owned(),
+            status,
+        })
+    }
+}
+
+/// The first byte position advertised by a `Content-Range` header.
+///
+/// `bytes 100-499/1234` yields `100`; a missing or malformed header yields
+/// `None`.
+#[cfg(feature = "http")]
+fn content_range_start(response: &reqwest::Response) -> Option<u64> {
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)?
+        .to_str()
+        .ok()
+        .and_then(parse_content_range)
+}
+
+/// Parse the first byte position out of a `Content-Range` value.
+///
+/// The `bytes` unit is matched case-insensitively, as HTTP tokens are.
+fn parse_content_range(value: &str) -> Option<u64> {
+    let (unit, range) = value.split_once(' ')?;
+    if !unit.eq_ignore_ascii_case("bytes") {
+        return None;
+    }
+
+    range.split(['-', '/']).next()?.trim().parse().ok()
+}
+
+/// Open the temporary file for writing, appending when resuming from `offset`.
+#[cfg(feature = "http")]
+fn open_partial(path: &Path, offset: u64) -> Result<std::fs::File> {
+    let file = if offset == 0 {
+        std::fs::File::create(path)
+    } else {
+        std::fs::OpenOptions::new().append(true).open(path)
+    };
+
+    file.map_err(|source| Error::Write {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+/// Size of an existing partial download, or zero when there is none.
+#[cfg(feature = "http")]
+fn partial_size(path: &Path) -> u64 {
+    std::fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0)
+}
+
 /// Stream a response body into `file`, reporting progress.
+///
+/// `downloaded` seeds the running count with the bytes already on disk so
+/// progress and the returned total include a resumed prefix.
 #[cfg(feature = "http")]
 async fn write_body<F>(
     file: &mut std::fs::File,
     mut response: reqwest::Response,
     dest: &Path,
     url: &str,
+    mut downloaded: u64,
     total: Option<u64>,
     progress: &mut F,
-) -> Result<()>
+) -> Result<u64>
 where
     F: FnMut(Progress),
 {
     use std::io::Write;
 
-    let mut downloaded = 0;
     while let Some(chunk) = response.chunk().await.map_err(|source| Error::Request {
         url: url.to_owned(),
         source,
@@ -223,7 +359,7 @@ where
         progress(Progress { downloaded, total });
     }
 
-    Ok(())
+    Ok(downloaded)
 }
 
 /// Whether a device model named `model` maps to `group` via its SoC.
@@ -248,7 +384,8 @@ fn file_name(link: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// A temporary sibling of `dest` used while the download is in flight.
+/// A stable temporary sibling of `dest`, used both for the in-flight download
+/// and to resume an interrupted one on a later run.
 #[cfg(any(feature = "http", test))]
 fn temp_path(dest: &Path) -> PathBuf {
     let mut name = std::ffi::OsString::from(".");
@@ -256,7 +393,7 @@ fn temp_path(dest: &Path) -> PathBuf {
         || std::ffi::OsString::from("download"),
         |name| name.to_os_string(),
     ));
-    name.push(format!(".part-{}", std::process::id()));
+    name.push(".part");
     dest.with_file_name(name)
 }
 
@@ -514,12 +651,17 @@ mod tests {
     #[test]
     fn temporary_path_is_a_sibling() {
         let temp = temp_path(Path::new("/tmp/image.tar.xz"));
-        assert_eq!(temp.parent(), Some(Path::new("/tmp")));
-        assert!(
-            temp.file_name()
-                .unwrap()
-                .to_string_lossy()
-                .contains(".part-")
-        );
+        assert_eq!(temp, Path::new("/tmp/.image.tar.xz.part"));
+    }
+
+    #[test]
+    fn parses_content_range_start() {
+        assert_eq!(parse_content_range("bytes 100-499/1234"), Some(100));
+        assert_eq!(parse_content_range("Bytes 12-34/*"), Some(12));
+        assert_eq!(parse_content_range("bytes 0-0/1"), Some(0));
+        assert_eq!(parse_content_range("bytes 12-34/*"), Some(12));
+        assert_eq!(parse_content_range("100-499/1234"), None);
+        assert_eq!(parse_content_range("bytes */1234"), None);
+        assert_eq!(parse_content_range("nonsense"), None);
     }
 }

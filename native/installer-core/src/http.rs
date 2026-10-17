@@ -42,14 +42,7 @@ fn build() -> Result<Client> {
 /// Fetch `url` with the shared client, returning a response with a success
 /// status.
 pub async fn response(url: &str) -> Result<reqwest::Response> {
-    let response = client()?
-        .get(url)
-        .send()
-        .await
-        .map_err(|source| Error::Request {
-            url: url.to_owned(),
-            source,
-        })?;
+    let response = response_from(url, 0).await?;
 
     let status = response.status();
     if !status.is_success() {
@@ -60,6 +53,23 @@ pub async fn response(url: &str) -> Result<reqwest::Response> {
     }
 
     Ok(response)
+}
+
+/// Fetch `url`, resuming from byte `offset` when it is non-zero.
+///
+/// Unlike [`response`], non-success statuses such as `416 Range Not
+/// Satisfiable` are returned rather than turned into errors, so resumable
+/// downloads can inspect them and recover.
+pub async fn response_from(url: &str, offset: u64) -> Result<reqwest::Response> {
+    let mut request = client()?.get(url);
+    if offset > 0 {
+        request = request.header(reqwest::header::RANGE, format!("bytes={offset}-"));
+    }
+
+    request.send().await.map_err(|source| Error::Request {
+        url: url.to_owned(),
+        source,
+    })
 }
 
 /// Fetch `url` with the shared client and return its body as text.

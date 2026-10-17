@@ -69,6 +69,20 @@ pub enum Error {
     #[error("image link `{0}` has no file name")]
     LinkFileName(String),
 
+    /// A download ended before the whole image was written.
+    #[cfg(feature = "http")]
+    #[error("download of `{url}` ended after {downloaded} of {expected} bytes")]
+    Incomplete {
+        /// URL that was being downloaded.
+        url: String,
+
+        /// Bytes written before the body ended.
+        downloaded: u64,
+
+        /// Expected total size in bytes.
+        expected: u64,
+    },
+
     /// The document is not valid TOML.
     #[error("invalid TOML: {0}")]
     Parse(#[from] toml::de::Error),
