@@ -1,5 +1,6 @@
 pub mod arch;
 pub mod devices;
+pub mod download;
 #[cfg(feature = "generate")]
 pub mod generate;
 #[cfg(feature = "http")]
@@ -32,6 +33,40 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+
+    /// No image matched the requested device, variant or date.
+    #[error("no image matches device `{device}`")]
+    NoImage {
+        /// Requested device model or image-group slug.
+        device: String,
+
+        /// Requested variant filter, if any.
+        variant: Option<String>,
+
+        /// Requested publication date, if any.
+        date: Option<String>,
+    },
+
+    /// A device matched more than one image group.
+    #[error("device `{device}` matches multiple image groups; narrow it with `--arch`: {}", .candidates.join(", "))]
+    Ambiguous {
+        /// Requested device model or image-group slug.
+        device: String,
+
+        /// Matched groups, formatted as `<arch>/<device>`.
+        candidates: Vec<String>,
+    },
+
+    /// The destination already exists and overwriting was not requested.
+    #[error("`{path}` already exists (use `--force` to overwrite)")]
+    AlreadyExists {
+        /// Conflicting destination path.
+        path: PathBuf,
+    },
+
+    /// An image link does not end in a usable file name.
+    #[error("image link `{0}` has no file name")]
+    LinkFileName(String),
 
     /// The document is not valid TOML.
     #[error("invalid TOML: {0}")]

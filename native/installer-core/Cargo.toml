@@ -22,3 +22,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 toml = { version = "1", features = ["preserve_order"] }
+url = "2"
