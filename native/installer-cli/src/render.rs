@@ -79,7 +79,7 @@ fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
 /// Print a Markdown-style table with a header row.
 fn print_table(headers: &[&str], rows: &[Vec<String>]) {
     let mut table = Table::new();
-    table.load_preset(presets::ASCII_MARKDOWN);
+    table.load_style(presets::ASCII_MARKDOWN);
     table.set_content_arrangement(ContentArrangement::Dynamic);
 
     table.set_header(headers.iter().map(Cell::new));
