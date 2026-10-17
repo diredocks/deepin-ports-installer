@@ -23,10 +23,6 @@ pub enum Error {
     #[error("invalid TOML: {0}")]
     Parse(#[from] toml::de::Error),
 
-    /// The document is valid TOML but not shaped like the expected index.
-    #[error("unexpected TOML structure: {0}")]
-    Shape(String),
-
     /// Serializing an index to JSON failed.
     #[error("failed to serialize JSON: {0}")]
     SerializeJson(#[from] serde_json::Error),

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -46,35 +47,22 @@ impl ImageIndex {
     /// Parse an `images.toml` document.
     ///
     /// The document is a two-level map, `[[<arch>.<device>]]`, that cannot be
-    /// expressed as a plain struct, so it is walked manually to preserve the
-    /// order in which the groups appear in the file.
+    /// expressed as a plain struct. It is decoded into nested maps and then
+    /// flattened into groups; the resulting order is sorted (by architecture,
+    /// then device) rather than the order the groups appear in the file.
     pub fn parse(document: &str) -> Result<Self> {
-        let root: toml::Table = toml::from_str(document)?;
-        let mut groups = Vec::new();
+        let parsed: BTreeMap<Arch, BTreeMap<String, Vec<Image>>> = toml::from_str(document)?;
 
-        for (arch, value) in &root {
-            let arch: Arch = arch.parse()?;
-
-            let arch_table = value.as_table().ok_or_else(|| {
-                Error::Shape(format!(
-                    "`{}` must be a table of device groups",
-                    arch.as_str()
-                ))
-            })?;
-
-            for (device, value) in arch_table {
-                let images: Vec<Image> = value
-                    .clone()
-                    .try_into()
-                    .map_err(|err| Error::Shape(format!("`{arch}.{device}`: {err}")))?;
-
-                groups.push(ImageGroup {
+        let groups = parsed
+            .into_iter()
+            .flat_map(|(arch, devices)| {
+                devices.into_iter().map(move |(device, images)| ImageGroup {
                     arch,
-                    device: device.clone(),
+                    device,
                     images,
-                });
-            }
-        }
+                })
+            })
+            .collect();
 
         Ok(Self { groups })
     }
@@ -192,7 +180,7 @@ mod tests {
     "#;
 
     #[test]
-    fn parses_groups_in_file_order() {
+    fn parses_groups_in_sorted_order() {
         let index = ImageIndex::parse(SAMPLE).unwrap();
         assert_eq!(index.len(), 3);
 
