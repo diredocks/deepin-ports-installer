@@ -12,7 +12,7 @@ pub mod text;
 
 pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex};
-pub use images::{Image, ImageGroup, ImageIndex};
+pub use images::{Image, ImageGroup, ImageIndex, Query};
 
 use std::path::PathBuf;
 

@@ -25,6 +25,15 @@ pub struct DeviceGroup {
     pub links: Vec<String>,
 }
 
+impl DeviceGroup {
+    /// Whether `model` names one of this group's device models.
+    pub fn covers(&self, model: &str) -> bool {
+        self.devices
+            .iter()
+            .any(|device| device.eq_ignore_ascii_case(model))
+    }
+}
+
 /// The top-level shape of `devices.toml`.
 #[derive(Debug, Deserialize)]
 struct DevicesFile {
@@ -83,6 +92,16 @@ impl DeviceIndex {
     /// Whether the index contains no device groups.
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
+    }
+
+    /// Whether `model` is a documented device of the `soc` on `arch`.
+    ///
+    /// This bridges a user-facing device model (e.g. `visionfive-2`) to an
+    /// image-group slug (e.g. `jh7110`) published as the SoC.
+    pub fn maps_to(&self, model: &str, arch: Arch, soc: &str) -> bool {
+        self.groups.iter().any(|group| {
+            group.arch == arch && group.soc.eq_ignore_ascii_case(soc) && group.covers(model)
+        })
     }
 
     /// Serialize the device groups as a pretty-printed JSON array.
@@ -183,6 +202,25 @@ mod tests {
 
         assert!(rendered.contains("[[devices]]"));
         assert_eq!(DeviceIndex::parse(&rendered).unwrap(), index);
+    }
+
+    #[test]
+    fn groups_cover_models_case_insensitively() {
+        let index = DeviceIndex::parse(SAMPLE).unwrap();
+        let group = &index.groups()[0];
+
+        assert!(group.covers("VisionFive-2"));
+        assert!(!group.covers("phytium-pi"));
+    }
+
+    #[test]
+    fn maps_models_through_arch_and_soc() {
+        let index = DeviceIndex::parse(SAMPLE).unwrap();
+
+        assert!(index.maps_to("MILKV-MARS", Arch::Riscv, "JH7110"));
+        assert!(!index.maps_to("milkv-mars", Arch::Arm64, "jh7110"));
+        assert!(!index.maps_to("milkv-mars", Arch::Riscv, "phytiumpi"));
+        assert!(!index.maps_to("unknown", Arch::Riscv, "jh7110"));
     }
 
     #[test]

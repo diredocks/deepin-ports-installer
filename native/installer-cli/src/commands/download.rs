@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use clap::Args;
 use humansize::{BINARY, format_size};
 use installer_core::date;
-use installer_core::download::{self, Progress, Query};
-use installer_core::{DeviceIndex, ImageIndex};
+use installer_core::download::{self, Progress};
+use installer_core::{DeviceIndex, ImageIndex, Query};
 
 use crate::cli::{ArchArg, VariantArg};
 use crate::render;
@@ -46,7 +46,8 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         date: args.date.as_deref(),
     };
 
-    let image = download::resolve(&images, &devices, &query)
+    let image = images
+        .resolve(&devices, &query)
         .context("failed to resolve a downloadable image")?;
 
     let dest = download::destination(args.output.as_deref(), &image)?;
