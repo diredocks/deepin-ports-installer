@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use url::Url;
 
+use crate::date;
 use crate::paths;
 use crate::text::contains_ignore_case;
 use crate::{Arch, DeviceIndex, Error, Image, ImageGroup, ImageIndex, Result};
@@ -70,8 +71,6 @@ fn select_group<'a>(
 /// Pick the newest image in `group` that also matches the variant and date
 /// filters. Group images are sorted by date, so the last match is the newest.
 fn select_image(group: &ImageGroup, query: &Query<'_>) -> Result<Image> {
-    let date = query.date.map(normalize);
-
     group
         .images
         .iter()
@@ -79,9 +78,9 @@ fn select_image(group: &ImageGroup, query: &Query<'_>) -> Result<Image> {
             query
                 .variant
                 .is_none_or(|variant| contains_ignore_case(&image.variant, variant))
-                && date
-                    .as_ref()
-                    .is_none_or(|date| normalize(&image.date).starts_with(date))
+                && query
+                    .date
+                    .is_none_or(|day| date::is_on_day(&image.date, day))
         })
         .cloned()
         .ok_or_else(|| no_image(query))
@@ -237,16 +236,6 @@ fn maps_to(devices: &DeviceIndex, model: &str, group: &ImageGroup) -> bool {
                 .iter()
                 .any(|device| device.eq_ignore_ascii_case(model))
     })
-}
-
-/// Digits-only form so dates compare regardless of separators (`2024-01-01` →
-/// `20240101`).
-fn normalize(value: &str) -> String {
-    value
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .map(|character| character.to_ascii_lowercase())
-        .collect()
 }
 
 /// The final path segment of a link, ignoring any query or fragment.

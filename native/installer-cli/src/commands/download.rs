@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
+use installer_core::date;
 use installer_core::download::{self, Progress, Query};
 use installer_core::{DeviceIndex, ImageIndex};
 
@@ -54,7 +55,7 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         "downloading {} for {} (built {}, {}) to {}",
         image.variant,
         args.device,
-        format_build_date(&image.date),
+        date::format(&image.date),
         format_size(image.size, BINARY.decimal_places(1)),
         dest.display()
     );
@@ -91,26 +92,6 @@ pub fn run(args: DownloadArgs) -> Result<()> {
     Ok(())
 }
 
-/// Render a build timestamp such as `20250625-030117` as a readable
-/// `2025-06-25 03:01:17`, falling back to the original string if it does not
-/// match the expected 14-digit form.
-fn format_build_date(date: &str) -> String {
-    let digits: String = date.chars().filter(|c| c.is_ascii_digit()).collect();
-    if digits.len() == 14 {
-        format!(
-            "{}-{}-{} {}:{}:{}",
-            &digits[0..4],
-            &digits[4..6],
-            &digits[6..8],
-            &digits[8..10],
-            &digits[10..12],
-            &digits[12..14]
-        )
-    } else {
-        date.to_owned()
-    }
-}
-
 /// A progress bar tracking a download of `total` bytes on stderr.
 fn download_bar(total: u64) -> ProgressBar {
     let bar = ProgressBar::new(total);
@@ -123,19 +104,4 @@ fn download_bar(total: u64) -> ProgressBar {
     );
     bar.set_message("downloading");
     bar
-}
-
-#[cfg(test)]
-mod tests {
-    use super::format_build_date;
-
-    #[test]
-    fn build_dates_are_made_readable() {
-        assert_eq!(format_build_date("20250625-030117"), "2025-06-25 03:01:17");
-    }
-
-    #[test]
-    fn unexpected_dates_are_left_alone() {
-        assert_eq!(format_build_date("unknown"), "unknown");
-    }
 }

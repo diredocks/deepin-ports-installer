@@ -1,4 +1,5 @@
 pub mod arch;
+pub mod date;
 pub mod devices;
 pub mod download;
 #[cfg(feature = "generate")]

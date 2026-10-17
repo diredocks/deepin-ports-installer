@@ -11,6 +11,7 @@ use std::path::Path;
 use astral_html::Document;
 use futures_util::stream::{self, StreamExt, TryStreamExt};
 
+use crate::date;
 use crate::http;
 use crate::{Arch, Error, Image, ImageGroup, ImageIndex, Result};
 
@@ -185,12 +186,7 @@ fn parse_index(html: &str) -> Result<Vec<Entry>> {
 
 /// Whether a listing entry is a `YYYYMMDD/` build directory.
 fn is_date_dir(entry: &Entry) -> bool {
-    entry.dir && entry.name.strip_suffix('/').is_some_and(is_day)
-}
-
-/// Whether `token` is exactly eight digits forming a plausible `YYYYMMDD`.
-fn is_day(token: &str) -> bool {
-    token.len() == 8 && token.starts_with("20") && token.bytes().all(|byte| byte.is_ascii_digit())
+    entry.dir && entry.name.strip_suffix('/').is_some_and(date::is_day)
 }
 
 /// Map a repository architecture directory to a supported [`Arch`].
@@ -239,7 +235,7 @@ fn record_from(
         image: Image {
             variant: parts[1..4].join("-"),
             size: entry.size,
-            date: extract_date(stem),
+            date: date::from_stem(stem).unwrap_or_default(),
             link: format!("{base}/{date}{arch_dir}/{}", entry.name),
         },
     })
@@ -267,27 +263,6 @@ fn device_from(parts: &[&str]) -> String {
         .map(|parts| parts.join("-"))
         .filter(|device| !device.is_empty())
         .unwrap_or_else(|| "generic".to_owned())
-}
-
-/// Extract the `YYYYMMDD-HHMMSS` timestamp embedded in a file stem.
-///
-/// The stem is split on `-` and scanned for a day token immediately followed by
-/// a six-digit time token; trailing suffixes such as `_kernel-6.7` are ignored.
-fn extract_date(stem: &str) -> String {
-    let tokens: Vec<&str> = stem.split('-').collect();
-
-    tokens
-        .windows(2)
-        .find_map(|pair| {
-            let time = pair[1].split('_').next().unwrap_or(pair[1]);
-            (is_day(pair[0]) && is_time(time)).then(|| format!("{}-{time}", pair[0]))
-        })
-        .unwrap_or_default()
-}
-
-/// Whether `token` is exactly six digits forming a `HHMMSS` time.
-fn is_time(token: &str) -> bool {
-    token.len() == 6 && token.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 #[cfg(test)]
