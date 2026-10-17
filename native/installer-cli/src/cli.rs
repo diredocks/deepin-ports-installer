@@ -6,6 +6,7 @@ pub use installer_core::Arch;
 
 use crate::commands::download::DownloadArgs;
 use crate::commands::flash::FlashArgs;
+use crate::commands::generate::GenerateArgs;
 use crate::commands::identify::IdentifyArgs;
 use crate::commands::list::ListArgs;
 use crate::logging::LogLevel;
@@ -62,6 +63,9 @@ pub enum Command {
 
     /// Identify the currently connected device
     Identify(IdentifyArgs),
+
+    /// Regenerate the bundled `images.toml` manifest from the image repository
+    Generate(GenerateArgs),
 }
 
 // --- reusable argument groups ---

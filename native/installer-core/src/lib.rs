@@ -1,5 +1,9 @@
 pub mod arch;
 pub mod devices;
+#[cfg(feature = "generate")]
+pub mod generate;
+#[cfg(feature = "http")]
+pub mod http;
 pub mod images;
 
 pub use arch::Arch;
@@ -14,6 +18,14 @@ pub enum Error {
     /// Reading a file from disk failed.
     #[error("failed to read `{path}`")]
     Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// Writing a file to disk failed.
+    #[error("failed to write `{path}`")]
+    Write {
         path: PathBuf,
         #[source]
         source: std::io::Error,
@@ -34,6 +46,33 @@ pub enum Error {
     /// An architecture slug is not one of the known values.
     #[error("unknown architecture `{0}`")]
     UnknownArch(String),
+
+    /// Building the HTTP client used to crawl the image repository failed.
+    #[cfg(feature = "http")]
+    #[error("failed to build HTTP client")]
+    HttpClient(#[source] reqwest::Error),
+
+    /// A listing request failed.
+    #[cfg(feature = "http")]
+    #[error("request to `{url}` failed")]
+    Request {
+        url: String,
+        #[source]
+        source: reqwest::Error,
+    },
+
+    /// A listing request returned a non-success status.
+    #[cfg(feature = "http")]
+    #[error("`{url}` returned HTTP {status}")]
+    HttpStatus {
+        url: String,
+        status: reqwest::StatusCode,
+    },
+
+    /// A directory listing is not valid HTML.
+    #[cfg(feature = "generate")]
+    #[error("invalid HTML listing: {0}")]
+    Html(#[from] astral_html::Error),
 }
 
 /// Convenience alias used across this crate.

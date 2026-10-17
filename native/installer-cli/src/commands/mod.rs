@@ -1,5 +1,6 @@
 pub mod download;
 pub mod flash;
+pub mod generate;
 pub mod identify;
 pub mod list;
 
@@ -16,5 +17,6 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Download(args) => download::run(args),
         Command::Flash(args) => flash::run(args),
         Command::Identify(args) => identify::run(args),
+        Command::Generate(args) => generate::run(args),
     }
 }
