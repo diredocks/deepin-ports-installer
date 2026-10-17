@@ -50,7 +50,7 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         .resolve(&devices, &query)
         .context("failed to resolve a downloadable image")?;
 
-    let dest = download::destination(args.output.as_deref(), &image)?;
+    let dest = download::destination(args.output.as_deref(), &image.link)?;
 
     log::info!(
         "downloading {} for {} (built {}, {}) to {}",
@@ -83,7 +83,13 @@ pub fn run(args: DownloadArgs) -> Result<()> {
 
     tokio::runtime::Runtime::new()
         .context("failed to start async runtime")?
-        .block_on(download::download(&image, &dest, args.force, progress))
+        .block_on(download::download(
+            &image.link,
+            image.size,
+            &dest,
+            args.force,
+            progress,
+        ))
         .context("failed to download image")?;
 
     bar.finish_and_clear();

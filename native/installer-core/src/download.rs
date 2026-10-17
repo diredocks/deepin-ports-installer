@@ -1,24 +1,23 @@
-//! Download Deepin Ports images.
+//! Stream a remote file to a local path.
 //!
-//! Resolving a query to a single [`Image`] lives in [`crate::images`]; this
-//! module streams a chosen image to a local path.
+//! Resolving a query to a single image lives in [`crate::images`]; this module
+//! downloads any URL, resuming an interrupted transfer when possible.
 
 use std::path::{Path, PathBuf};
 
 use url::Url;
 
 use crate::paths;
-use crate::{Error, Image, Result};
+use crate::{Error, Result};
 
-/// Resolve where `image` should be written.
+/// Resolve where a download from `url` should be written.
 ///
 /// A destination that is an existing directory, or that ends with a path
-/// separator, has the image's file name appended. Anything else is used
-/// verbatim. Without a destination, the image is placed in the `images`
+/// separator, has the file name from `url` appended. Anything else is used
+/// verbatim. Without a destination, the file is placed in the `images`
 /// subdirectory of the platform cache directory.
-pub fn destination(output: Option<&Path>, image: &Image) -> Result<PathBuf> {
-    let file_name =
-        file_name(&image.link).ok_or_else(|| Error::LinkFileName(image.link.clone()))?;
+pub fn destination(output: Option<&Path>, url: &str) -> Result<PathBuf> {
+    let file_name = file_name(url).ok_or_else(|| Error::LinkFileName(url.to_owned()))?;
 
     match output {
         None => Ok(paths::cache_dir()?.join("images").join(file_name)),
@@ -37,15 +36,22 @@ pub struct Progress {
     pub total: Option<u64>,
 }
 
-/// Download `image` to `dest`, calling `progress` as data arrives.
+/// Download `url` to `dest`, calling `progress` as data arrives.
 ///
-/// The body is streamed to a temporary sibling of `dest` and moved into place
-/// once complete, so `dest` never holds a partial image. An interrupted
-/// download leaves that sibling behind; a later call resumes it with an HTTP
-/// `Range` request instead of starting over. Unless `force` is set, an existing
-/// `dest` is refused.
+/// `size` is the expected length in bytes, or `0` when it is unknown. The body
+/// is streamed to a temporary sibling of `dest` and moved into place once
+/// complete, so `dest` never holds a partial download. An interrupted download
+/// leaves that sibling behind; a later call resumes it with an HTTP `Range`
+/// request instead of starting over. Unless `force` is set, an existing `dest`
+/// is refused.
 #[cfg(feature = "http")]
-pub async fn download<F>(image: &Image, dest: &Path, force: bool, mut progress: F) -> Result<()>
+pub async fn download<F>(
+    url: &str,
+    size: u64,
+    dest: &Path,
+    force: bool,
+    mut progress: F,
+) -> Result<()>
 where
     F: FnMut(Progress),
 {
@@ -66,18 +72,18 @@ where
     }
 
     let temp = temp_path(dest);
-    let expected = (image.size > 0).then_some(image.size);
+    let expected = (size > 0).then_some(size);
 
     // Resume wherever a previous run stopped, unless the leftover is already
-    // as large as the image we expect (a stale partial from another build).
+    // as large as the file we expect (a stale partial from another build).
     let mut offset = partial_size(&temp);
     if expected.is_some_and(|total| offset >= total) {
         let _ = std::fs::remove_file(&temp);
         offset = 0;
     }
 
-    let response = crate::http::response_from(&image.link, offset).await?;
-    let (response, offset) = reconcile(response, &image.link, &temp, offset).await?;
+    let response = crate::http::response_from(url, offset).await?;
+    let (response, offset) = reconcile(response, url, &temp, offset).await?;
 
     let total = response
         .content_length()
@@ -94,7 +100,7 @@ where
         &mut file,
         response,
         &temp,
-        &image.link,
+        url,
         offset,
         total,
         &mut progress,
@@ -118,7 +124,7 @@ where
         && written < expected
     {
         return Err(Error::Incomplete {
-            url: image.link.clone(),
+            url: url.to_owned(),
             downloaded: written,
             expected,
         });
@@ -163,7 +169,7 @@ async fn reconcile(
             Ok((response, offset))
         }
         // A partial response we cannot place, or a range the server refuses:
-        // drop the part file and fetch the whole image again.
+        // drop the part file and fetch the whole file again.
         StatusCode::PARTIAL_CONTENT | StatusCode::RANGE_NOT_SATISFIABLE => {
             let _ = std::fs::remove_file(temp);
             let response = crate::http::response_from(url, 0).await?;
@@ -210,6 +216,7 @@ fn content_range_start(response: &reqwest::Response) -> Option<u64> {
 /// Parse the first byte position out of a `Content-Range` value.
 ///
 /// The `bytes` unit is matched case-insensitively, as HTTP tokens are.
+#[cfg(any(feature = "http", test))]
 fn parse_content_range(value: &str) -> Option<u64> {
     let (unit, range) = value.split_once(' ')?;
     if !unit.eq_ignore_ascii_case("bytes") {
@@ -304,15 +311,6 @@ fn temp_path(dest: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn image(variant: &str, date: &str, link: &str) -> Image {
-        Image {
-            variant: variant.to_owned(),
-            size: 1,
-            date: date.to_owned(),
-            link: link.to_owned(),
-        }
-    }
-
     #[test]
     fn derives_file_name_from_link() {
         assert_eq!(
@@ -330,14 +328,10 @@ mod tests {
 
     #[test]
     fn builds_destination_from_link_and_output() {
-        let sample = image(
-            "25-crimson-preview",
-            "20250101-000000",
-            "https://e/20250101/riscv64/deepin-25-crimson-preview-riscv64-k1-20250101-000000.tar.xz",
-        );
+        let link = "https://e/20250101/riscv64/deepin-25-crimson-preview-riscv64-k1-20250101-000000.tar.xz";
 
         assert_eq!(
-            destination(None, &sample).unwrap(),
+            destination(None, link).unwrap(),
             paths::cache_dir()
                 .unwrap()
                 .join("images")
@@ -345,18 +339,18 @@ mod tests {
         );
 
         assert_eq!(
-            destination(Some(Path::new("/tmp/custom.img")), &sample).unwrap(),
+            destination(Some(Path::new("/tmp/custom.img")), link).unwrap(),
             PathBuf::from("/tmp/custom.img")
         );
 
         assert_eq!(
-            destination(Some(&std::env::temp_dir()), &sample).unwrap(),
+            destination(Some(&std::env::temp_dir()), link).unwrap(),
             std::env::temp_dir()
                 .join("deepin-25-crimson-preview-riscv64-k1-20250101-000000.tar.xz")
         );
 
         assert!(matches!(
-            destination(None, &image("v", "d", "https://e/")),
+            destination(None, "https://e/"),
             Err(Error::LinkFileName(_))
         ));
     }
