@@ -1,4 +1,4 @@
-import { mdiFlash, mdiFolderOpenOutline, mdiHarddisk, mdiLinkVariant, mdiLaptop } from "@mdi/js";
+import { mdiFlash, mdiHarddisk, mdiLinkVariant, mdiLaptop } from "@mdi/js";
 import { createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import { Icon } from "~/components/Icon";
@@ -60,14 +60,6 @@ export function Home() {
               <button type="button" class={ghostButton} onClick={() => setDeviceDialogOpen(true)}>
                 <Icon path={mdiLinkVariant} size={16} class="text-gray-400" />
                 Go select
-              </button>
-              <button
-                type="button"
-                class="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4
-                       text-sm text-gray-600 transition-colors hover:text-gray-900 active:bg-gray-100"
-              >
-                <Icon path={mdiFolderOpenOutline} size={16} class="text-gray-400" />
-                Select local image
               </button>
             </div>
           </Step>
