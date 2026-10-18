@@ -165,7 +165,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
             </For>
           </div>
 
-          <div class="flex-1 overflow-y-auto">
+          <div class="flex-1 scrollbar-overlay">
             <For each={visibleGroups()}>
               {(group) => (
                 <div>

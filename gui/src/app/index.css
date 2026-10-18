@@ -5,3 +5,29 @@ body,
 #root {
   height: 100%;
 }
+
+@utility scrollbar-overlay {
+  overflow-y: auto;
+  overflow-y: overlay;
+  scrollbar-width: thin;
+  scrollbar-color: --alpha(var(--color-black) / 20%) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: --alpha(var(--color-black) / 20%);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: --alpha(var(--color-black) / 35%);
+  }
+}
