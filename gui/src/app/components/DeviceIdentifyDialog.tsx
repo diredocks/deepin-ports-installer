@@ -203,6 +203,11 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
             size={140}
             class="pointer-events-none absolute -right-4 -top-8 rotate-12 text-text-faint/20"
           />
+          <Show when={selected() === ""}>
+            <div class="flex flex-1 items-center justify-center">
+              <p class="text-center text-sm text-text-faint">Select a device to continue</p>
+            </div>
+          </Show>
           <button
             type="button"
             onClick={props.onClose}
