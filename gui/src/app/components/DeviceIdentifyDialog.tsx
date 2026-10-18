@@ -1,4 +1,4 @@
-import { mdiMagnify } from "@mdi/js";
+import { mdiDevices, mdiMagnify } from "@mdi/js";
 import { For, Show, createSignal } from "solid-js";
 import { Dialog } from "~/components/Dialog";
 import { Icon } from "~/components/Icon";
@@ -139,9 +139,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
                      focus:border-primary-border focus:outline-none"
             />
             <Show when={query().length === 0}>
-              <span
-                class="pointer-events-none absolute inset-0 truncate py-1.5 pl-8 pr-4 text-sm text-text-faint"
-              >
+              <span class="pointer-events-none absolute inset-0 truncate py-1.5 pl-8 pr-4 text-sm text-text-faint">
                 Search devices, e.g. visionfive-2, radxa-rock-5
               </span>
             </Show>
@@ -199,7 +197,12 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
           </div>
         </div>
         <div class="w-px bg-border" />
-        <div class="flex flex-1 flex-col p-6">
+        <div class="relative flex flex-1 flex-col p-6">
+          <Icon
+            path={mdiDevices}
+            size={140}
+            class="pointer-events-none absolute -right-4 -top-8 rotate-12 text-text-faint/20"
+          />
           <button
             type="button"
             onClick={props.onClose}
