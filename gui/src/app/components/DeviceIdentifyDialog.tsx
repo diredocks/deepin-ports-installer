@@ -128,19 +128,19 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
             <Icon
               path={mdiMagnify}
               size={16}
-              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-faint"
             />
             <input
               type="text"
               value={query()}
               onInput={(e) => setQuery(e.currentTarget.value)}
-              class="w-full overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-200
-                     bg-transparent py-1.5 pl-8 pr-4 text-sm text-gray-700
-                     focus:border-blue-400 focus:outline-none"
+              class="w-full overflow-hidden text-ellipsis whitespace-nowrap border-b border-border
+                     bg-transparent py-1.5 pl-8 pr-4 text-sm text-text-secondary
+                     focus:border-primary-border focus:outline-none"
             />
             <Show when={query().length === 0}>
               <span
-                class="pointer-events-none absolute inset-0 truncate py-1.5 pl-8 pr-4 text-sm text-gray-400"
+                class="pointer-events-none absolute inset-0 truncate py-1.5 pl-8 pr-4 text-sm text-text-faint"
               >
                 Search devices, e.g. visionfive-2, radxa-rock-5
               </span>
@@ -155,8 +155,8 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
                   onClick={() => setTab(item)}
                   class={`border-b py-1.5 text-sm transition-colors ${
                     tab() === item
-                      ? "border-blue-500 font-medium text-blue-600"
-                      : "border-gray-200 text-gray-500 hover:text-gray-700"
+                      ? "border-primary font-medium text-primary-text"
+                      : "border-border text-text-soft hover:text-text-secondary"
                   }`}
                 >
                   {item}
@@ -169,10 +169,10 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
             <For each={visibleGroups()}>
               {(group) => (
                 <div>
-                  <h3 class="sticky top-0 z-10 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm">
+                  <h3 class="sticky top-0 z-10 bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm">
                     {group.soc}
                   </h3>
-                  <div class="divide-y divide-gray-200">
+                  <div class="divide-y divide-border">
                     <For each={group.devices}>
                       {(device) => (
                         <button
@@ -181,8 +181,8 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
                           class={`flex w-full items-center px-4 py-2 text-left text-sm
                                   transition-colors ${
                                     selected() === device
-                                      ? "bg-blue-50 font-medium text-blue-600"
-                                      : "text-gray-700 hover:bg-gray-50"
+                                      ? "bg-primary-soft font-medium text-primary-text"
+                                      : "text-text-secondary hover:bg-surface"
                                   }`}
                         >
                           <span>{device}</span>
@@ -194,11 +194,11 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
               )}
             </For>
             <Show when={visibleGroups().length === 0}>
-              <p class="py-6 text-center text-xs text-gray-400">No matching devices.</p>
+              <p class="py-6 text-center text-xs text-text-faint">No matching devices.</p>
             </Show>
           </div>
         </div>
-        <div class="w-px bg-gray-200" />
+        <div class="w-px bg-border" />
         <div class="flex flex-1 p-6" />
       </div>
     </Dialog>
