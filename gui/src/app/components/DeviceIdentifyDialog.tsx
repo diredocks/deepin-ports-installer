@@ -199,7 +199,17 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
           </div>
         </div>
         <div class="w-px bg-border" />
-        <div class="flex flex-1 p-6" />
+        <div class="flex flex-1 flex-col p-6">
+          <button
+            type="button"
+            onClick={props.onClose}
+            class="mt-auto self-end rounded-md bg-primary px-4 py-1.5 text-sm font-medium
+                   text-text-inverse shadow-sm transition-colors hover:bg-primary-hover
+                   active:bg-primary-active"
+          >
+            Confirm
+          </button>
+        </div>
       </div>
     </Dialog>
   );
