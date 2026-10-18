@@ -103,7 +103,7 @@ const groups: DeviceGroup[] = [
 export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
   const [tab, setTab] = createSignal<(typeof tabs)[number]>("All");
   const [query, setQuery] = createSignal("");
-  const [selected, setSelected] = createSignal("visionfive-2");
+  const [selected, setSelected] = createSignal("");
 
   const visibleGroups = () =>
     groups
@@ -203,9 +203,11 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
           <button
             type="button"
             onClick={props.onClose}
+            disabled={selected() === ""}
             class="mt-auto self-end rounded-md bg-primary px-4 py-1.5 text-sm font-medium
                    text-text-inverse shadow-sm transition-colors hover:bg-primary-hover
-                   active:bg-primary-active"
+                   active:bg-primary-active disabled:cursor-not-allowed disabled:bg-surface-hover
+                   disabled:text-text-faint disabled:shadow-none"
           >
             Confirm
           </button>
