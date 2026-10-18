@@ -1,5 +1,7 @@
+import { mdiMagnify } from "@mdi/js";
 import { For, Show, createSignal } from "solid-js";
 import { Dialog } from "~/components/Dialog";
+import { Icon } from "~/components/Icon";
 
 type DeviceIdentifyDialogProps = {
   open: boolean;
@@ -122,15 +124,28 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
     <Dialog open={props.open} onClose={props.onClose}>
       <div class="flex h-full">
         <div class="flex flex-1 flex-col">
-          <input
-            type="text"
-            value={query()}
-            onInput={(e) => setQuery(e.currentTarget.value)}
-            placeholder="Search devices, e.g. visionfive-2, radxa-rock-5"
-            class="overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-200
-                   bg-transparent px-4 py-1.5 text-sm text-gray-700
-                   placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
-          />
+          <div class="relative">
+            <Icon
+              path={mdiMagnify}
+              size={16}
+              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              value={query()}
+              onInput={(e) => setQuery(e.currentTarget.value)}
+              class="w-full overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-200
+                     bg-transparent py-1.5 pl-8 pr-4 text-sm text-gray-700
+                     focus:border-blue-400 focus:outline-none"
+            />
+            <Show when={query().length === 0}>
+              <span
+                class="pointer-events-none absolute inset-0 truncate py-1.5 pl-8 pr-4 text-sm text-gray-400"
+              >
+                Search devices, e.g. visionfive-2, radxa-rock-5
+              </span>
+            </Show>
+          </div>
 
           <div class="grid grid-cols-3">
             <For each={tabs}>
