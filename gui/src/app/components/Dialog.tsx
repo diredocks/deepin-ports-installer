@@ -1,4 +1,8 @@
-import type { JSX } from "solid-js";
+import { createEffect, createSignal, onCleanup, type JSX } from "solid-js";
+
+const [dialogOpen, setDialogOpen] = createSignal(false);
+
+export { dialogOpen };
 
 type DialogProps = {
   open: boolean;
@@ -7,6 +11,9 @@ type DialogProps = {
 };
 
 export function Dialog(props: DialogProps) {
+  createEffect(() => setDialogOpen(props.open));
+  onCleanup(() => setDialogOpen(false));
+
   return (
     <div
       class={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 transition-opacity

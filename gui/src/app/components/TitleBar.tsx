@@ -1,4 +1,5 @@
 import { mdiClose, mdiWindowMinimize } from "@mdi/js";
+import { dialogOpen } from "~/components/Dialog";
 import { Icon } from "~/components/Icon";
 import logo from "~/assets/logo.svg";
 
@@ -7,7 +8,7 @@ export function TitleBar() {
     <div class="h-8 flex items-center select-none">
       <div
         class="flex-1 h-full flex items-center pl-3 text-sm font-medium text-gray-600"
-        style={{ "-webkit-app-region": "drag" }}
+        style={{ "-webkit-app-region": dialogOpen() ? "no-drag" : "drag" }}
       >
         <img src={logo} alt="Deepin logo" class="h-5 w-5" />
         <span class="ml-2">Deepin Ports Installer</span>
