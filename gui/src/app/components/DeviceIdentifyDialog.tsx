@@ -7,10 +7,9 @@ type DeviceIdentifyDialogProps = {
 };
 
 type DeviceGroup = {
-  id: string;
-  name: string;
-  arch: "riscv64" | "arm64";
+  arch: "riscv" | "arm64";
   platform: string;
+  soc: string;
   devices: string[];
 };
 
@@ -18,25 +17,84 @@ const tabs = ["All", "RISC-V", "ARM64"] as const;
 
 const groups: DeviceGroup[] = [
   {
-    id: "jh7110",
-    name: "jh7110",
-    arch: "riscv64",
-    platform: "riscv · sifive-u74",
+    arch: "riscv",
+    platform: "sifive-u74",
+    soc: "jh7110",
     devices: ["visionfive-2", "milkv-mars", "dc-roma"],
   },
   {
-    id: "eic7700",
-    name: "eic7700",
-    arch: "riscv64",
-    platform: "riscv · sifive-p550",
-    devices: ["eic7700-evb", "hifive-premier-p550", "milkv-megrez"],
+    arch: "riscv",
+    platform: "sifive-p550",
+    soc: "eic7700",
+    devices: ["eic7700-evb", "hifive-premier-p550", "milkv-megrez", "star-pro-64", "eic7700-sbc"],
   },
   {
-    id: "rk3588",
-    name: "rk3588",
+    arch: "riscv",
+    platform: "xiuantie-c920",
+    soc: "sg2042",
+    devices: ["sg2042-evb", "milkv-pioneer"],
+  },
+  {
+    arch: "riscv",
+    platform: "xiuantie-c920",
+    soc: "sg2044",
+    devices: ["sg2044-evb"],
+  },
+  {
+    arch: "riscv",
+    platform: "xiuantie-c910",
+    soc: "th1520",
+    devices: ["t-head-light-a", "licheepi-4a"],
+  },
+  {
+    arch: "riscv",
+    platform: "spacemit-x60",
+    soc: "k1",
+    devices: [
+      "muse-box",
+      "muse-book",
+      "muse-pi",
+      "muse-pi-pro",
+      "dc-roma-2",
+      "licheepi-3a",
+      "orangepi-rv2",
+    ],
+  },
+  {
+    arch: "riscv",
+    platform: "spacemit-x100",
+    soc: "k3",
+    devices: ["k3-pico-itx"],
+  },
+  {
+    arch: "riscv",
+    platform: "generic",
+    soc: "generic",
+    devices: ["qemu-rv", "milkv-titan", "ultrarisc-dp1000", "sophgo-sg2044"],
+  },
+  {
     arch: "arm64",
-    platform: "arm64 · rockchip",
-    devices: ["rock-5b", "orangepi-5-plus", "cm3588"],
+    platform: "phytium",
+    soc: "phytiumpi",
+    devices: ["phytium-pi"],
+  },
+  {
+    arch: "arm64",
+    platform: "qualcomm",
+    soc: "qcom",
+    devices: ["radxa-dragon-q6a", "radxa-dragon-q8b"],
+  },
+  {
+    arch: "arm64",
+    platform: "rockchip",
+    soc: "rockchip",
+    devices: ["radxa-rock-5", "radxa-rock-4d", "dshanpi-a1", "other-rockchip-devices"],
+  },
+  {
+    arch: "arm64",
+    platform: "allwinner",
+    soc: "a733",
+    devices: ["radxa-cubie-a7a", "radxa-cubie-a7z"],
   },
 ];
 
@@ -48,7 +106,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
   const visibleGroups = () =>
     groups
       .filter((group) => {
-        if (tab() === "RISC-V") return group.arch === "riscv64";
+        if (tab() === "RISC-V") return group.arch === "riscv";
         if (tab() === "ARM64") return group.arch === "arm64";
         return true;
       })
@@ -97,7 +155,7 @@ export function DeviceIdentifyDialog(props: DeviceIdentifyDialogProps) {
               {(group) => (
                 <div>
                   <h3 class="sticky top-0 z-10 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm">
-                    {group.name}
+                    {group.soc}
                   </h3>
                   <div class="divide-y divide-gray-200">
                     <For each={group.devices}>
