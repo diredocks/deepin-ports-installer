@@ -230,6 +230,15 @@ impl<'a> IntoIterator for &'a TargetList {
     }
 }
 
+impl IntoIterator for TargetList {
+    type Item = Target;
+    type IntoIter = std::vec::IntoIter<Target>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.targets.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
