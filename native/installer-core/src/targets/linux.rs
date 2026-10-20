@@ -36,7 +36,7 @@ pub(super) fn scan() -> Result<TargetList> {
     };
 
     add_device_paths(&mut targets);
-    Ok(TargetList::from(targets))
+    Ok(TargetList::new(targets))
 }
 
 // --- lsblk invocation -------------------------------------------------------

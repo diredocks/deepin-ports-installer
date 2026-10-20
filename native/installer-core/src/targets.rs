@@ -215,21 +215,6 @@ impl TargetList {
     }
 }
 
-impl From<Vec<Target>> for TargetList {
-    fn from(targets: Vec<Target>) -> Self {
-        Self { targets }
-    }
-}
-
-impl<'a> IntoIterator for &'a TargetList {
-    type Item = &'a Target;
-    type IntoIter = std::slice::Iter<'a, Target>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.targets.iter()
-    }
-}
-
 impl IntoIterator for TargetList {
     type Item = Target;
     type IntoIter = std::vec::IntoIter<Target>;
@@ -288,7 +273,7 @@ mod tests {
 
     #[test]
     fn to_json_emits_target_array() {
-        let list = TargetList::from(vec![sample_target()]);
+        let list = TargetList::new(vec![sample_target()]);
         let value: serde_json::Value = serde_json::from_str(&list.to_json().unwrap()).unwrap();
 
         let array = value.as_array().unwrap();
@@ -301,7 +286,7 @@ mod tests {
 
     #[test]
     fn to_toml_round_trips_targets_layout() {
-        let list = TargetList::from(vec![sample_target()]);
+        let list = TargetList::new(vec![sample_target()]);
         let rendered = list.to_toml().unwrap();
 
         assert!(rendered.contains("[[targets]]"));
