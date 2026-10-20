@@ -59,9 +59,7 @@ pub enum Command {
     Generate(GenerateArgs),
 }
 
-// --- reusable argument groups ---
-
-/// Architecture filter (`--arch`).
+/// Architecture filter.
 #[derive(Debug, Args)]
 pub struct ArchArg {
     /// Filter by architecture
@@ -69,7 +67,7 @@ pub struct ArchArg {
     pub arch: Option<Arch>,
 }
 
-/// Image variant filter (`--variant`).
+/// Image variant filter.
 #[derive(Debug, Args)]
 pub struct VariantArg {
     /// Filter by image variant (e.g. 25-crimson-preview)
@@ -77,7 +75,7 @@ pub struct VariantArg {
     pub variant: Option<String>,
 }
 
-/// Output format selector (`--format`).
+/// Output format selector.
 #[derive(Debug, Args)]
 pub struct FormatArg {
     /// Output format

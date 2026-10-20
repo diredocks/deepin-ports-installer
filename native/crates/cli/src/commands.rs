@@ -12,7 +12,6 @@ use anyhow::Result;
 
 use crate::cli::{Cli, Command};
 
-/// Dispatch a parsed command line to its handler.
 pub fn run(cli: Cli) -> Result<()> {
     log::trace!("parsed command: {:?}", cli.command);
 

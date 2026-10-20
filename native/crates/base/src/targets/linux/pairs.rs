@@ -10,7 +10,6 @@ use crate::{Error, Result};
 /// One `--pairs` row, keyed by lowercased column name.
 type Fields = HashMap<String, String>;
 
-/// Enumerate targets from `lsblk --pairs`.
 pub(super) fn scan() -> Result<Vec<Target>> {
     let output = run_lsblk(&["--bytes", "--all", "--pairs", "-o", "+pttype"])
         .or_else(|_| run_lsblk(&["--bytes", "--all", "--pairs"]))?;
@@ -18,7 +17,6 @@ pub(super) fn scan() -> Result<Vec<Target>> {
     parse(&output)
 }
 
-/// Parse and consolidate a `--pairs` listing.
 fn parse(output: &str) -> Result<Vec<Target>> {
     let rows = output
         .lines()
@@ -78,7 +76,6 @@ fn parse_quoted(input: &str) -> Option<(String, usize)> {
     None
 }
 
-/// Convert one disk row into a target.
 fn target(row: &Fields, rows: &[Fields]) -> Option<Target> {
     let name = value(row, "name")?;
     let mut device = Device::new(name)?;
@@ -110,7 +107,6 @@ fn target(row: &Fields, rows: &[Fields]) -> Option<Target> {
     Some(device.into_target(Enumerator::LsblkPairs))
 }
 
-/// Build a mount point from a pairs row, when it has one.
 fn mountpoint(row: &Fields) -> Option<Mountpoint> {
     Some(Mountpoint {
         path: PathBuf::from(value(row, "mountpoint")?),
@@ -120,14 +116,12 @@ fn mountpoint(row: &Fields) -> Option<Mountpoint> {
     })
 }
 
-/// A non-empty value of `key` in a pairs row.
 fn value<'a>(row: &'a Fields, key: &str) -> Option<&'a str> {
     row.get(key)
         .map(String::as_str)
         .filter(|value| !value.is_empty())
 }
 
-/// A numeric value of `key` in a pairs row.
 fn number(row: &Fields, key: &str) -> Option<u64> {
     value(row, key)?.trim().parse().ok()
 }

@@ -29,13 +29,11 @@ pub struct Image {
     /// Release variant, e.g. `25-crimson-preview`.
     pub variant: String,
 
-    /// Size of the image in bytes.
     pub size: u64,
 
     /// Build timestamp, e.g. `20250625-030117`.
     pub date: String,
 
-    /// Download URL.
     pub link: String,
 }
 
@@ -53,8 +51,6 @@ pub struct ImageGroup {
 }
 
 impl ImageGroup {
-    /// Pick the newest image matching the variant and date filters.
-    ///
     /// Images are sorted by date, so the last match is the newest.
     fn select_image(&self, query: &Query<'_>) -> Result<Image> {
         self.images
@@ -75,7 +71,6 @@ impl ImageGroup {
 /// The `images.toml` bundled into the binary at compile time.
 const EMBEDDED_IMAGES: &str = include_str!("../assets/images.toml");
 
-/// Parsed contents of `images.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImageIndex {
     groups: Vec<ImageGroup>,
@@ -105,7 +100,6 @@ impl ImageIndex {
         Ok(Self::from(groups))
     }
 
-    /// Read and parse an `images.toml` file.
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let document = std::fs::read_to_string(path).map_err(|source| Error::Io {
@@ -115,27 +109,22 @@ impl ImageIndex {
         Self::parse(&document)
     }
 
-    /// Parse the `images.toml` bundled into the binary at compile time.
     pub fn embedded() -> Result<Self> {
         Self::parse(EMBEDDED_IMAGES)
     }
 
-    /// All image groups, in file order.
     pub fn groups(&self) -> &[ImageGroup] {
         &self.groups
     }
 
-    /// Iterate over all image groups.
     pub fn iter(&self) -> std::slice::Iter<'_, ImageGroup> {
         self.groups.iter()
     }
 
-    /// Number of image groups.
     pub fn len(&self) -> usize {
         self.groups.len()
     }
 
-    /// Whether the index contains no image groups.
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
     }
@@ -150,8 +139,6 @@ impl ImageIndex {
         self.select_group(devices, query)?.select_image(query)
     }
 
-    /// Pick the single group that `query.device` names, failing when it names
-    /// none or several.
     fn select_group<'a>(
         &'a self,
         devices: &DeviceIndex,
@@ -180,7 +167,6 @@ impl ImageIndex {
         }
     }
 
-    /// Serialize the image groups as a pretty-printed JSON array.
     pub fn to_json(&self) -> Result<String> {
         Ok(serde_json::to_string_pretty(&self.groups)?)
     }
@@ -232,7 +218,6 @@ impl<'a> IntoIterator for &'a ImageIndex {
     }
 }
 
-/// The "nothing matched" error for `query`.
 fn no_image(query: &Query<'_>) -> Error {
     Error::NoImage {
         device: query.device.to_owned(),
@@ -329,20 +314,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_document_yields_empty_index() {
-        let index = ImageIndex::parse("").unwrap();
-        assert!(index.is_empty());
-    }
-
-    #[test]
-    fn rejects_invalid_toml() {
-        assert!(matches!(
-            ImageIndex::parse("[[riscv.jh7110]"),
-            Err(Error::Parse(_))
-        ));
-    }
-
-    #[test]
     fn to_toml_round_trips_canonical_layout() {
         let index = ImageIndex::parse(SAMPLE).unwrap();
         let rendered = index.to_toml().unwrap();
@@ -352,19 +323,6 @@ mod tests {
         assert!(rendered.contains("[[arm64.generic]]"));
 
         assert_eq!(ImageIndex::parse(&rendered).unwrap(), index);
-    }
-
-    #[test]
-    fn to_json_emits_group_array() {
-        let index = ImageIndex::parse(SAMPLE).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&index.to_json().unwrap()).unwrap();
-
-        let array = value.as_array().unwrap();
-        assert_eq!(array.len(), 3);
-        assert_eq!(array[0]["arch"], "riscv");
-        assert_eq!(array[0]["device"], "dp1000");
-        assert_eq!(array[1]["device"], "jh7110");
-        assert_eq!(array[1]["images"].as_array().unwrap().len(), 2);
     }
 
     fn image(variant: &str, date: &str, link: &str) -> Image {

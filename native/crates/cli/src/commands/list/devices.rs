@@ -45,7 +45,6 @@ pub fn run(args: DevicesArgs) -> Result<()> {
     render::devices(&DeviceIndex::from(groups), format)
 }
 
-/// Whether `group` satisfies every provided filter.
 fn matches(
     group: &DeviceGroup,
     arch: Option<Arch>,

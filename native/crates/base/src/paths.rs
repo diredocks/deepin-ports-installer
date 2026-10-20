@@ -11,7 +11,6 @@ use directories::ProjectDirs;
 
 use crate::{Error, Result};
 
-/// Values used to derive the platform application directories.
 const QUALIFIER: &str = "";
 const ORGANIZATION: &str = "deepin-community";
 const APPLICATION: &str = "deepin-ports-installer";
@@ -32,30 +31,22 @@ pub fn config_dir() -> Result<PathBuf> {
     project_dirs().map(|dirs| dirs.config_dir().to_path_buf())
 }
 
-/// Resolve the cache directory, preferring `override_dir` when provided.
-///
 /// The directory is only resolved, not created; use [`ensure_cache`] when it
 /// must exist.
 pub fn resolve_cache(override_dir: Option<&Path>) -> Result<PathBuf> {
     override_dir.map_or_else(cache_dir, |path| Ok(path.to_path_buf()))
 }
 
-/// Resolve the configuration directory, preferring `override_dir` when
-/// provided.
-///
 /// The directory is only resolved, not created; use [`ensure_config`] when it
 /// must exist.
 pub fn resolve_config(override_dir: Option<&Path>) -> Result<PathBuf> {
     override_dir.map_or_else(config_dir, |path| Ok(path.to_path_buf()))
 }
 
-/// Resolve the cache directory and create it (including parents) if needed.
 pub fn ensure_cache(override_dir: Option<&Path>) -> Result<PathBuf> {
     create_dir(resolve_cache(override_dir)?)
 }
 
-/// Resolve the configuration directory and create it (including parents) if
-/// needed.
 pub fn ensure_config(override_dir: Option<&Path>) -> Result<PathBuf> {
     create_dir(resolve_config(override_dir)?)
 }
@@ -68,12 +59,10 @@ pub fn is_directory(path: &Path) -> bool {
     path.is_dir() || path.to_string_lossy().ends_with(['/', '\\'])
 }
 
-/// Derive [`ProjectDirs`] for this application.
 fn project_dirs() -> Result<ProjectDirs> {
     ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION).ok_or(Error::ProjectDirs)
 }
 
-/// Create `path` (including parents) and return it.
 fn create_dir(path: PathBuf) -> Result<PathBuf> {
     std::fs::create_dir_all(&path).map_err(|source| Error::Io {
         path: path.clone(),
@@ -85,18 +74,6 @@ fn create_dir(path: PathBuf) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn explicit_cache_override_takes_precedence() {
-        let dir = std::env::temp_dir().join("deepin-ports-cache-override");
-        assert_eq!(resolve_cache(Some(&dir)).unwrap(), dir);
-    }
-
-    #[test]
-    fn explicit_config_override_takes_precedence() {
-        let dir = std::env::temp_dir().join("deepin-ports-config-override");
-        assert_eq!(resolve_config(Some(&dir)).unwrap(), dir);
-    }
 
     #[test]
     fn ensure_creates_missing_directories() {

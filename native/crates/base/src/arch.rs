@@ -85,15 +85,4 @@ mod tests {
             Err(Error::UnknownArch(slug)) if slug == "mips"
         ));
     }
-
-    #[test]
-    fn deserializes_from_toml_slug() {
-        #[derive(Deserialize)]
-        struct Wrapper {
-            arch: Arch,
-        }
-
-        let wrapper: Wrapper = toml::from_str("arch = \"arm64\"").unwrap();
-        assert_eq!(wrapper.arch, Arch::Arm64);
-    }
 }

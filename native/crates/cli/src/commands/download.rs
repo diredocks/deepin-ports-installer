@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::Args;
-use humansize::{BINARY, format_size};
 use base::date;
 use base::download::{self, Progress};
 use base::{DeviceIndex, ImageIndex, Query};
+use clap::Args;
+use humansize::{BINARY, format_size};
 
 use crate::cli::{ArchArg, VariantArg};
 use crate::render;

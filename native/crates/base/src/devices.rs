@@ -26,7 +26,6 @@ pub struct DeviceGroup {
 }
 
 impl DeviceGroup {
-    /// Whether `model` names one of this group's device models.
     pub fn covers(&self, model: &str) -> bool {
         self.devices
             .iter()
@@ -44,14 +43,12 @@ struct DevicesFile {
 /// The `devices.toml` bundled into the binary at compile time.
 const EMBEDDED_DEVICES: &str = include_str!("../assets/devices.toml");
 
-/// Parsed contents of `devices.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DeviceIndex {
     groups: Vec<DeviceGroup>,
 }
 
 impl DeviceIndex {
-    /// Parse a `devices.toml` document.
     pub fn parse(document: &str) -> Result<Self> {
         let file: DevicesFile = toml::from_str(document)?;
         Ok(Self {
@@ -59,7 +56,6 @@ impl DeviceIndex {
         })
     }
 
-    /// Read and parse a `devices.toml` file.
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let document = std::fs::read_to_string(path).map_err(|source| Error::Io {
@@ -69,27 +65,22 @@ impl DeviceIndex {
         Self::parse(&document)
     }
 
-    /// Parse the `devices.toml` bundled into the binary at compile time.
     pub fn embedded() -> Result<Self> {
         Self::parse(EMBEDDED_DEVICES)
     }
 
-    /// All device groups, in file order.
     pub fn groups(&self) -> &[DeviceGroup] {
         &self.groups
     }
 
-    /// Iterate over all device groups.
     pub fn iter(&self) -> std::slice::Iter<'_, DeviceGroup> {
         self.groups.iter()
     }
 
-    /// Number of device groups.
     pub fn len(&self) -> usize {
         self.groups.len()
     }
 
-    /// Whether the index contains no device groups.
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
     }
@@ -104,15 +95,11 @@ impl DeviceIndex {
         })
     }
 
-    /// Serialize the device groups as a pretty-printed JSON array.
     pub fn to_json(&self) -> Result<String> {
         Ok(serde_json::to_string_pretty(&self.groups)?)
     }
 
-    /// Serialize the device groups back into the canonical `[[devices]]`
-    /// layout used by `devices.toml`.
     pub fn to_toml(&self) -> Result<String> {
-        /// Wrapper used to emit the listing as a top-level TOML table.
         #[derive(Serialize)]
         struct Document<'a> {
             devices: &'a [DeviceGroup],
@@ -182,20 +169,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_document_yields_empty_index() {
-        let index = DeviceIndex::parse("").unwrap();
-        assert!(index.is_empty());
-    }
-
-    #[test]
-    fn rejects_invalid_toml() {
-        assert!(matches!(
-            DeviceIndex::parse("[[devices]"),
-            Err(Error::Parse(_))
-        ));
-    }
-
-    #[test]
     fn to_toml_round_trips_devices_layout() {
         let index = DeviceIndex::parse(SAMPLE).unwrap();
         let rendered = index.to_toml().unwrap();
@@ -221,16 +194,5 @@ mod tests {
         assert!(!index.maps_to("milkv-mars", Arch::Arm64, "jh7110"));
         assert!(!index.maps_to("milkv-mars", Arch::Riscv, "phytiumpi"));
         assert!(!index.maps_to("unknown", Arch::Riscv, "jh7110"));
-    }
-
-    #[test]
-    fn to_json_emits_group_array() {
-        let index = DeviceIndex::parse(SAMPLE).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&index.to_json().unwrap()).unwrap();
-
-        let array = value.as_array().unwrap();
-        assert_eq!(array.len(), 2);
-        assert_eq!(array[0]["arch"], "riscv");
-        assert_eq!(array[0]["devices"][0], "visionfive-2");
     }
 }

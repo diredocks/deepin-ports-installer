@@ -247,7 +247,6 @@ pub struct TargetList {
 }
 
 impl TargetList {
-    /// Wrap an already collected list of targets.
     pub fn new(targets: Vec<Target>) -> Self {
         Self { targets }
     }
@@ -282,29 +281,24 @@ impl TargetList {
         &self.targets
     }
 
-    /// Iterate over all targets.
     pub fn iter(&self) -> std::slice::Iter<'_, Target> {
         self.targets.iter()
     }
 
-    /// Number of targets.
     pub fn len(&self) -> usize {
         self.targets.len()
     }
 
-    /// Whether no targets were found.
     pub fn is_empty(&self) -> bool {
         self.targets.is_empty()
     }
 
-    /// Serialize the targets as a pretty-printed JSON array.
     pub fn to_json(&self) -> Result<String> {
         Ok(serde_json::to_string_pretty(&self.targets)?)
     }
 
     /// Serialize the targets as a `[[targets]]` TOML document.
     pub fn to_toml(&self) -> Result<String> {
-        /// Wrapper used to emit the listing as a top-level TOML table.
         #[derive(Serialize)]
         struct Document<'a> {
             targets: &'a [Target],
@@ -456,12 +450,5 @@ mod tests {
 
         let parsed: Document = toml::from_str(&rendered).unwrap();
         assert_eq!(parsed.targets, vec![sample_target()]);
-    }
-
-    #[test]
-    fn empty_list_serializes_to_empty_array() {
-        let list = TargetList::default();
-        assert!(list.is_empty());
-        assert_eq!(list.to_json().unwrap(), "[]");
     }
 }

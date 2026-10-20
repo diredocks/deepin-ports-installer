@@ -12,7 +12,6 @@
 use super::TargetList;
 use crate::Result;
 
-/// Enumerate local block devices.
 pub(super) fn scan() -> Result<TargetList> {
     todo!("enumerate block devices on macOS")
 }

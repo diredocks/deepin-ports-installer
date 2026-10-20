@@ -6,7 +6,6 @@ use reqwest::Client;
 
 use crate::{Error, Result};
 
-/// `User-Agent` sent with every request.
 const USER_AGENT: &str = concat!("deepin-ports-installer/", env!("CARGO_PKG_VERSION"));
 
 /// The process-wide HTTP client, built lazily on first use.
@@ -16,7 +15,6 @@ const USER_AGENT: &str = concat!("deepin-ports-installer/", env!("CARGO_PKG_VERS
 /// every caller, including concurrent downloads.
 static CLIENT: OnceLock<Client> = OnceLock::new();
 
-/// Return the shared HTTP client, building it on first use.
 pub fn client() -> Result<&'static Client> {
     if let Some(client) = CLIENT.get() {
         return Ok(client);
@@ -26,7 +24,6 @@ pub fn client() -> Result<&'static Client> {
     Ok(CLIENT.get_or_init(|| client))
 }
 
-/// Build a fresh client, installing the TLS provider it needs.
 fn build() -> Result<Client> {
     // `reqwest` is built without a bundled TLS provider, so install `ring`
     // before the first client is created. This is idempotent; the process may

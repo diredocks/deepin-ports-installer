@@ -1,11 +1,10 @@
 use anyhow::Result;
+use base::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
 use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
-use base::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
 
-/// Output format selector (`--format`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
     #[default]
@@ -14,7 +13,6 @@ pub enum OutputFormat {
     Toml,
 }
 
-/// Render a device index.
 pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Json => {
@@ -33,7 +31,6 @@ pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
     }
 }
 
-/// Render an image index.
 pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Json => {
@@ -65,7 +62,6 @@ fn device_row(group: &DeviceGroup) -> Vec<String> {
     ]
 }
 
-/// Render a target list.
 pub fn targets(list: &TargetList, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Json => {

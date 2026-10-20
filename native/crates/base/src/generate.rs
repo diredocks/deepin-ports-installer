@@ -118,7 +118,6 @@ pub async fn image_index(options: &Options) -> Result<ImageIndex> {
     Ok(ImageIndex::from(groups))
 }
 
-/// Serialize `index` as TOML and write it to `path`.
 pub fn write_file(index: &ImageIndex, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     let document = index.to_toml()?;
@@ -135,13 +134,11 @@ struct Record {
     image: Image,
 }
 
-/// One entry from a directory listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Entry {
     /// Link target as written in the index (a file name or `dir/`).
     name: String,
 
-    /// Whether the entry is a directory.
     dir: bool,
 
     /// File size in bytes; `0` for directories.
@@ -199,8 +196,6 @@ fn arch_from_dir(dir: &str) -> Option<Arch> {
     }
 }
 
-/// Turn a listing entry into a record, or `None` when it is not an image of
-/// `arch_dir`.
 fn record_from(
     base: &str,
     arch: Arch,
@@ -248,7 +243,6 @@ fn image_stem(name: &str) -> Option<&str> {
         .find_map(|extension| name.strip_suffix(extension))
 }
 
-/// Whether `name` is a compressed image archive.
 fn is_archive(name: &str) -> bool {
     name.ends_with(".tar.xz") || name.ends_with(".tar.gz")
 }

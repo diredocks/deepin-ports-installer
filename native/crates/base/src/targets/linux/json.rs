@@ -8,7 +8,6 @@ use super::{Device, is_virtual, partition_table, run_lsblk, text};
 use crate::Result;
 use crate::targets::{Enumerator, Mountpoint, Target};
 
-/// Enumerate targets from `lsblk --json`.
 pub(super) fn scan() -> Result<Vec<Target>> {
     let output = run_lsblk(&["--bytes", "--all", "--json", "--paths", "--output-all"])?;
 
@@ -16,7 +15,6 @@ pub(super) fn scan() -> Result<Vec<Target>> {
     Ok(parsed.blockdevices.iter().filter_map(target).collect())
 }
 
-/// Top-level `lsblk --json` document.
 #[derive(Deserialize)]
 struct LsblkOutput {
     #[serde(default)]
@@ -83,7 +81,6 @@ impl LsblkDevice {
     }
 }
 
-/// Convert one JSON device into a target, dropping irrelevant devices.
 fn target(device: &LsblkDevice) -> Option<Target> {
     let mut row = Device::new(device.name.as_deref()?)?;
 
@@ -210,7 +207,6 @@ mod tests {
         ]
     }"#;
 
-    /// Parse [`JSON`] into targets.
     fn targets() -> Vec<Target> {
         let output: LsblkOutput = serde_json::from_str(JSON).unwrap();
         output.blockdevices.iter().filter_map(target).collect()

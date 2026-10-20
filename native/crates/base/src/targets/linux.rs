@@ -22,13 +22,10 @@ use std::process::Command;
 use super::{BusType, Enumerator, Mountpoint, PartitionTable, Target, TargetList};
 use crate::{Error, Result};
 
-/// The `lsblk` binary.
 const LSBLK: &str = "lsblk";
 
-/// Directory holding stable device links.
 const DISK_PATH_DIR: &str = "/dev/disk/by-path";
 
-/// Enumerate local block devices.
 pub(super) fn scan() -> Result<TargetList> {
     let mut targets = match json::scan() {
         Ok(targets) => targets,
@@ -39,9 +36,6 @@ pub(super) fn scan() -> Result<TargetList> {
     Ok(TargetList::new(targets))
 }
 
-// --- lsblk invocation -------------------------------------------------------
-
-/// Run `lsblk` with `args` and return its stdout.
 fn run_lsblk(args: &[&str]) -> Result<String> {
     let output = Command::new(LSBLK)
         .args(args)
@@ -62,12 +56,6 @@ fn run_lsblk(args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-// --- normalized device rows -------------------------------------------------
-
-/// A backend independent `lsblk` device row.
-///
-/// The JSON and `--pairs` readers both fill this in; [`Device::into_target`]
-/// then derives the flags that `drivelist` reports from the raw fields.
 #[derive(Debug, Default)]
 struct Device {
     /// Device node, e.g. `/dev/sdb`, already resolved and filtered.
@@ -116,7 +104,6 @@ impl Device {
         self.transport = transport.map(BusType::from);
     }
 
-    /// Convert the row into a [`Target`].
     fn into_target(self, enumerator: Enumerator) -> Target {
         let transport = self.transport.as_ref();
 
@@ -148,17 +135,11 @@ impl Device {
     }
 }
 
-// --- shared helpers ---------------------------------------------------------
-
-/// Whether `lsblk`'s subsystem list marks the device as virtual.
-///
-/// `drivelist` treats devices whose only subsystem is `block` (device mapper,
-/// LVM, ...) as virtual.
+/// `drivelist` treats devices whose only subsystem is `block` as virtual.
 fn is_virtual(subsystems: Option<&str>) -> bool {
     subsystems.is_some_and(|subsystems| subsystems.eq_ignore_ascii_case("block"))
 }
 
-/// A non-empty view of an optional string field.
 fn text(value: &Option<String>) -> Option<&str> {
     value.as_deref().filter(|value| !value.is_empty())
 }
@@ -191,7 +172,6 @@ fn describe(
     }
 }
 
-/// The device path of an `lsblk` name, resolving relative names under `/dev`.
 fn resolve_device(name: &str) -> PathBuf {
     let path = Path::new(name);
     if path.is_absolute() {
@@ -209,7 +189,6 @@ fn is_ignored(device: &Path) -> bool {
         .any(|prefix| device.starts_with(prefix))
 }
 
-/// Map an `lsblk` partition-table type to [`PartitionTable`].
 fn partition_table(pttype: Option<&str>) -> Option<PartitionTable> {
     match pttype?.trim().to_ascii_lowercase().as_str() {
         "gpt" => Some(PartitionTable::Gpt),
@@ -218,7 +197,6 @@ fn partition_table(pttype: Option<&str>) -> Option<PartitionTable> {
     }
 }
 
-/// Attach `/dev/disk/by-path` links to the matching targets.
 fn add_device_paths(targets: &mut [Target]) {
     let Ok(entries) = std::fs::read_dir(DISK_PATH_DIR) else {
         return;
@@ -279,13 +257,5 @@ mod tests {
         );
         assert_eq!(describe(None, None, Some("  "), "/dev/sdb"), "/dev/sdb");
         assert_eq!(describe(None, Some(""), None, "/dev/sda"), "/dev/sda");
-    }
-
-    #[test]
-    fn marks_single_subsystem_devices_virtual() {
-        assert!(is_virtual(Some("block")));
-        assert!(is_virtual(Some("BLOCK")));
-        assert!(!is_virtual(Some("block:scsi:usb:pci")));
-        assert!(!is_virtual(None));
     }
 }

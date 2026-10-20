@@ -182,8 +182,6 @@ async fn reconcile(
     }
 }
 
-/// Return `response` unchanged when it has a success status, or the matching
-/// [`Error::HttpStatus`] otherwise.
 #[cfg(feature = "http")]
 fn ensure_success(response: reqwest::Response, url: &str) -> Result<reqwest::Response> {
     let status = response.status();
@@ -239,7 +237,6 @@ fn open_partial(path: &Path, offset: u64) -> Result<std::fs::File> {
     })
 }
 
-/// Size of an existing partial download, or zero when there is none.
 #[cfg(feature = "http")]
 fn partial_size(path: &Path) -> u64 {
     std::fs::metadata(path)
@@ -282,7 +279,6 @@ where
     Ok(downloaded)
 }
 
-/// The final path segment of a link, ignoring any query or fragment.
 fn file_name(link: &str) -> Option<String> {
     Url::parse(link)
         .ok()?
@@ -364,7 +360,6 @@ mod tests {
         assert_eq!(parse_content_range("bytes 100-499/1234"), Some(100));
         assert_eq!(parse_content_range("Bytes 12-34/*"), Some(12));
         assert_eq!(parse_content_range("bytes 0-0/1"), Some(0));
-        assert_eq!(parse_content_range("bytes 12-34/*"), Some(12));
         assert_eq!(parse_content_range("100-499/1234"), None);
         assert_eq!(parse_content_range("bytes */1234"), None);
         assert_eq!(parse_content_range("nonsense"), None);
