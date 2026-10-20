@@ -1,7 +1,12 @@
-pub mod download;
-pub mod flash;
-pub mod generate;
-pub mod list;
+mod download;
+mod flash;
+mod generate;
+mod list;
+
+pub use download::DownloadArgs;
+pub use flash::FlashArgs;
+pub use generate::GenerateArgs;
+pub use list::ListArgs;
 
 use anyhow::Result;
 

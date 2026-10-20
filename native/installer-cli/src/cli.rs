@@ -2,10 +2,7 @@ use clap::{Args, Parser, Subcommand};
 
 pub use installer_core::Arch;
 
-use crate::commands::download::DownloadArgs;
-use crate::commands::flash::FlashArgs;
-use crate::commands::generate::GenerateArgs;
-use crate::commands::list::ListArgs;
+use crate::commands::{DownloadArgs, FlashArgs, GenerateArgs, ListArgs};
 use crate::logging::LogLevel;
 use crate::render::OutputFormat;
 

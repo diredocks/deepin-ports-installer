@@ -1,13 +1,11 @@
-pub mod devices;
-pub mod images;
-pub mod targets;
+mod devices;
+mod images;
+mod targets;
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use self::devices::DevicesArgs;
-use self::images::ImagesArgs;
-use self::targets::TargetsArgs;
+use self::{devices::DevicesArgs, images::ImagesArgs, targets::TargetsArgs};
 
 #[derive(Debug, Args)]
 pub struct ListArgs {
