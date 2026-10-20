@@ -18,14 +18,21 @@ pub struct TargetsArgs {
 
 pub fn run(args: TargetsArgs) -> Result<()> {
     let targets = TargetList::scan().context("failed to list local block devices")?;
-
-    log::debug!("found {} local target(s)", targets.len());
+    let total = targets.len();
+    log::debug!("found {total} local target(s)");
 
     let targets = if args.all {
         targets
     } else {
         filter_flashable(targets)
     };
+
+    if targets.len() != total {
+        log::debug!(
+            "hid {} system/removable-incompatible target(s); use `--all` to show them",
+            total - targets.len()
+        );
+    }
 
     if targets.is_empty() && args.output.format == OutputFormat::Table {
         if args.all {
@@ -43,18 +50,10 @@ pub fn run(args: TargetsArgs) -> Result<()> {
 
 /// Keep only removable, non-system targets unless the caller asked for all.
 fn filter_flashable(targets: TargetList) -> TargetList {
-    let total = targets.len();
     let kept: Vec<Target> = targets
         .into_iter()
         .filter(|target| !target.is_system && target.is_removable)
         .collect();
-
-    if kept.len() != total {
-        log::debug!(
-            "hid {} system/removable-incompatible target(s); use --all to show them",
-            total - kept.len()
-        );
-    }
 
     TargetList::new(kept)
 }
