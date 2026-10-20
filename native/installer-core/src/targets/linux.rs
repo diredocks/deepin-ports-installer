@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{Mountpoint, PartitionTable, Target, TargetList};
+use super::{BusType, Enumerator, Mountpoint, PartitionTable, Target, TargetList};
 use crate::{Error, Result};
 
 /// The `lsblk` binary.
@@ -83,7 +83,7 @@ struct Device {
     block_size: Option<u64>,
     logical_block_size: Option<u64>,
     mountpoints: Vec<Mountpoint>,
-    transport: Option<String>,
+    transport: Option<BusType>,
     is_virtual: bool,
     is_read_only: bool,
     is_removable: bool,
@@ -109,20 +109,20 @@ impl Device {
         self.is_removable = removable || hotplug || self.is_virtual;
     }
 
-    /// Fill in the transport, which also yields `bus_type`/`is_scsi`/`is_usb`.
+    /// Fill in the transport, which yields [`Target::bus_type`].
+    ///
+    /// Normalization (trimming, case, empty values) is [`BusType::from`]'s job.
     fn set_transport(&mut self, transport: Option<&str>) {
-        self.transport = transport.map(str::to_ascii_lowercase);
+        self.transport = transport.map(BusType::from);
     }
 
     /// Convert the row into a [`Target`].
-    fn into_target(self, enumerator: &str) -> Target {
-        let transport = self.transport.as_deref();
+    fn into_target(self, enumerator: Enumerator) -> Target {
+        let transport = self.transport.as_ref();
 
         Target {
-            enumerator: enumerator.to_owned(),
-            bus_type: transport
-                .map(str::to_ascii_uppercase)
-                .unwrap_or_else(|| "UNKNOWN".to_owned()),
+            enumerator,
+            bus_type: transport.cloned().unwrap_or_else(BusType::unreported),
             bus_version: None,
             description: describe(
                 self.label.as_deref(),
@@ -142,8 +142,6 @@ impl Device {
             is_virtual: self.is_virtual,
             is_removable: self.is_removable,
             is_card: None,
-            is_scsi: transport.map(|tran| matches!(tran, "sata" | "scsi" | "ata" | "ide" | "pci")),
-            is_usb: transport.map(|tran| tran == "usb"),
             is_uas: None,
             partition_table: self.partition_table,
         }

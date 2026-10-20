@@ -14,7 +14,7 @@ pub mod text;
 pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex};
 pub use images::{Image, ImageGroup, ImageIndex, Query};
-pub use targets::{Mountpoint, PartitionTable, Target, TargetList};
+pub use targets::{BusType, Enumerator, Mountpoint, PartitionTable, Target, TargetList};
 
 use std::path::PathBuf;
 

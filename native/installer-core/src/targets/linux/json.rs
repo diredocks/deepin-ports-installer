@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use super::{Device, is_virtual, partition_table, run_lsblk, text};
 use crate::Result;
-use crate::targets::{Mountpoint, Target};
+use crate::targets::{Enumerator, Mountpoint, Target};
 
 /// Enumerate targets from `lsblk --json`.
 pub(super) fn scan() -> Result<Vec<Target>> {
@@ -103,13 +103,13 @@ fn target(device: &LsblkDevice) -> Option<Target> {
         device.hotplug.unwrap_or(false),
     );
 
-    Some(row.into_target("lsblk:json"))
+    Some(row.into_target(Enumerator::LsblkJson))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::targets::PartitionTable;
+    use crate::targets::{BusType, PartitionTable};
 
     const JSON: &str = r#"{
         "blockdevices": [
@@ -224,15 +224,13 @@ mod tests {
         let usb = &targets[0];
         assert_eq!(usb.device, PathBuf::from("/dev/sda"));
         assert_eq!(usb.raw, PathBuf::from("/dev/sda"));
-        assert_eq!(usb.enumerator, "lsblk:json");
-        assert_eq!(usb.bus_type, "USB");
+        assert_eq!(usb.enumerator, Enumerator::LsblkJson);
+        assert_eq!(usb.bus_type, BusType::Usb);
         assert_eq!(usb.size, Some(32_000_000_000));
         assert_eq!(usb.block_size, 512);
         assert_eq!(usb.logical_block_size, 512);
         assert_eq!(usb.partition_table, Some(PartitionTable::Gpt));
         assert!(usb.is_removable);
-        assert_eq!(usb.is_usb, Some(true));
-        assert_eq!(usb.is_scsi, Some(false));
         assert!(!usb.is_system);
         assert!(!usb.is_virtual);
         assert_eq!(usb.description, "SanDisk Ultra USB");
@@ -251,6 +249,8 @@ mod tests {
         let system = &targets[1];
 
         assert_eq!(system.size, Some(1_024_209_543_168));
+        assert_eq!(system.bus_type, BusType::Unknown("NVME".into()));
+        assert!(!system.bus_type.is_scsi());
         assert_eq!(system.block_size, 4096);
         assert_eq!(system.logical_block_size, 512);
         assert!(!system.is_removable);

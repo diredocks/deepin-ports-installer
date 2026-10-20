@@ -104,7 +104,7 @@ fn target_row(target: &Target) -> Vec<String> {
             .size
             .map(|size| format_size(size, BINARY.decimal_places(1)))
             .unwrap_or_else(|| "-".to_owned()),
-        target.bus_type.clone(),
+        target.bus_type.to_string(),
         target
             .partition_table
             .map(|table| table.to_string())

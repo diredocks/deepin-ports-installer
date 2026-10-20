@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::{Device, is_virtual, partition_table, run_lsblk, text_is_true};
-use crate::targets::{Mountpoint, Target};
+use crate::targets::{Enumerator, Mountpoint, Target};
 use crate::{Error, Result};
 
 /// One `--pairs` row, keyed by lowercased column name.
@@ -107,7 +107,7 @@ fn target(row: &Fields, rows: &[Fields]) -> Option<Target> {
         value(row, "hotplug").is_some_and(text_is_true),
     );
 
-    Some(device.into_target("lsblk:pairs"))
+    Some(device.into_target(Enumerator::LsblkPairs))
 }
 
 /// Build a mount point from a pairs row, when it has one.
@@ -135,7 +135,7 @@ fn number(row: &Fields, key: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::targets::PartitionTable;
+    use crate::targets::{BusType, PartitionTable};
 
     const PAIRS: &str = r#"NAME="sda" MAJ:MIN="8:0" RM="0" SIZE="240065183744" RO="0" TYPE="disk" MOUNTPOINT="" PTTYPE="gpt"
 NAME="sda1" MAJ:MIN="8:1" RM="0" SIZE="209715200" RO="0" TYPE="part" MOUNTPOINT="/boot/efi" LABEL="EFI" PTTYPE="gpt"
@@ -152,7 +152,7 @@ NAME="sr0" MAJ:MIN="11:0" RM="1" SIZE="1048576" RO="0" TYPE="rom" MOUNTPOINT=""
 
         let system = &targets[0];
         assert_eq!(system.device, PathBuf::from("/dev/sda"));
-        assert_eq!(system.enumerator, "lsblk:pairs");
+        assert_eq!(system.enumerator, Enumerator::LsblkPairs);
         assert_eq!(system.size, Some(240_065_183_744));
         assert_eq!(system.block_size, 512);
         assert_eq!(system.partition_table, Some(PartitionTable::Gpt));
@@ -163,8 +163,7 @@ NAME="sr0" MAJ:MIN="11:0" RM="1" SIZE="1048576" RO="0" TYPE="rom" MOUNTPOINT=""
 
         let usb = &targets[1];
         assert_eq!(usb.device, PathBuf::from("/dev/sdb"));
-        assert_eq!(usb.bus_type, "USB");
-        assert_eq!(usb.is_usb, Some(true));
+        assert_eq!(usb.bus_type, BusType::Usb);
         assert!(usb.is_removable);
         assert!(!usb.is_system);
         assert_eq!(usb.description, "SanDisk Ultra USB");
