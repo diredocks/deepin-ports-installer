@@ -1,7 +1,10 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Args;
 
+use installer_core::TargetList;
+
 use crate::cli::FormatArg;
+use crate::render;
 
 #[derive(Debug, Args)]
 pub struct TargetsArgs {
@@ -10,7 +13,9 @@ pub struct TargetsArgs {
 }
 
 pub fn run(args: TargetsArgs) -> Result<()> {
-    log::debug!("list targets: format={:?}", args.output.format);
+    let targets = TargetList::scan().context("failed to list local block devices")?;
 
-    todo!("list local block devices")
+    log::debug!("found {} local target(s)", targets.len());
+
+    render::targets(&targets, args.output.format)
 }

@@ -8,11 +8,13 @@ pub mod generate;
 pub mod http;
 pub mod images;
 pub mod paths;
+pub mod targets;
 pub mod text;
 
 pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex};
 pub use images::{Image, ImageGroup, ImageIndex, Query};
+pub use targets::{Mountpoint, PartitionTable, Target, TargetList};
 
 use std::path::PathBuf;
 
@@ -94,6 +96,41 @@ pub enum Error {
     /// Serializing an index to TOML failed.
     #[error("failed to serialize TOML: {0}")]
     SerializeToml(#[from] toml::ser::Error),
+
+    /// Spawning a helper command failed.
+    #[error("failed to run `{program}`")]
+    Command {
+        /// Program that could not be spawned.
+        program: String,
+
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// A helper command exited unsuccessfully.
+    #[error("`{program}` failed with {status}: {stderr}")]
+    CommandFailed {
+        /// Program that failed.
+        program: String,
+
+        /// Exit status reported by the program.
+        status: std::process::ExitStatus,
+
+        /// Captured standard error, trimmed.
+        stderr: String,
+    },
+
+    /// A helper command printed unexpected output.
+    #[error("unexpected `lsblk` output: {0}")]
+    LsblkOutput(String),
+
+    /// `lsblk` printed JSON that could not be parsed.
+    #[error("failed to parse `lsblk` JSON output")]
+    LsblkJson(#[source] serde_json::Error),
+
+    /// Target enumeration is not implemented for this platform.
+    #[error("listing flash targets is not supported on this platform")]
+    UnsupportedPlatform,
 
     /// An architecture slug is not one of the known values.
     #[error("unknown architecture `{0}`")]

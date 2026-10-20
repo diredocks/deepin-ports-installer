@@ -3,7 +3,7 @@ use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
-use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
+use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
 
 /// Output format selector (`--format`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
@@ -63,6 +63,71 @@ fn device_row(group: &DeviceGroup) -> Vec<String> {
         group.platform.clone(),
         group.devices.join(", "),
     ]
+}
+
+/// Render a target list.
+pub fn targets(list: &TargetList, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            print!("{}", list.to_json()?);
+            Ok(())
+        }
+        OutputFormat::Toml => {
+            print!("{}", list.to_toml()?);
+            Ok(())
+        }
+        OutputFormat::Table => {
+            let rows = list.targets().iter().map(target_row).collect::<Vec<_>>();
+            print_table(
+                &[
+                    "Device",
+                    "Size",
+                    "Bus",
+                    "Table",
+                    "Removable",
+                    "System",
+                    "Read-only",
+                    "Description",
+                    "Mountpoints",
+                ],
+                &rows,
+            );
+            Ok(())
+        }
+    }
+}
+
+fn target_row(target: &Target) -> Vec<String> {
+    vec![
+        target.device.display().to_string(),
+        target
+            .size
+            .map(|size| format_size(size, BINARY.decimal_places(1)))
+            .unwrap_or_else(|| "-".to_owned()),
+        target.bus_type.clone(),
+        target
+            .partition_table
+            .map(|table| table.to_string())
+            .unwrap_or_else(|| "-".to_owned()),
+        yes_no(target.is_removable),
+        yes_no(target.is_system),
+        yes_no(target.is_read_only),
+        target.description.clone(),
+        if target.mountpoints.is_empty() {
+            "-".to_owned()
+        } else {
+            target
+                .mountpoints
+                .iter()
+                .map(|mountpoint| mountpoint.path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        },
+    ]
+}
+
+fn yes_no(value: bool) -> String {
+    if value { "yes" } else { "no" }.to_owned()
 }
 
 fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
