@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
-use serde::de::Error as _;
 
 use super::{Device, is_virtual, partition_table, run_lsblk, text};
 use crate::Result;
@@ -18,7 +17,7 @@ pub(super) fn scan() -> Result<Vec<Target>> {
 }
 
 /// Top-level `lsblk --json` document.
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct LsblkOutput {
     #[serde(default)]
     blockdevices: Vec<LsblkDevice>,
@@ -28,32 +27,28 @@ struct LsblkOutput {
 ///
 /// Every column is optional: which ones `lsblk` emits depends on its version
 /// and on `--output-all` support.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[derive(Deserialize)]
 struct LsblkDevice {
     name: Option<String>,
-    kname: Option<String>,
     label: Option<String>,
     partlabel: Option<String>,
     model: Option<String>,
     vendor: Option<String>,
     mountpoint: Option<String>,
+    #[serde(default)]
     mountpoints: Vec<String>,
     subsystems: Option<String>,
     tran: Option<String>,
     pttype: Option<String>,
-    #[serde(deserialize_with = "de_optional_u64")]
     size: Option<u64>,
-    #[serde(rename = "phy-sec", deserialize_with = "de_optional_u64")]
+    #[serde(rename = "phy-sec")]
     physical_block_size: Option<u64>,
-    #[serde(rename = "log-sec", deserialize_with = "de_optional_u64")]
+    #[serde(rename = "log-sec")]
     logical_block_size: Option<u64>,
-    #[serde(deserialize_with = "de_optional_bool")]
     ro: Option<bool>,
-    #[serde(deserialize_with = "de_optional_bool")]
     rm: Option<bool>,
-    #[serde(deserialize_with = "de_optional_bool")]
     hotplug: Option<bool>,
+    #[serde(default)]
     children: Vec<LsblkDevice>,
 }
 
@@ -92,10 +87,6 @@ impl LsblkDevice {
 fn target(device: &LsblkDevice) -> Option<Target> {
     let mut row = Device::new(device.name.as_deref()?)?;
 
-    if let Some(kname) = device.kname.as_deref() {
-        row.raw = Some(super::resolve_device(kname));
-    }
-
     row.label = device.label.clone();
     row.vendor = device.vendor.clone();
     row.model = device.model.clone();
@@ -115,48 +106,6 @@ fn target(device: &LsblkDevice) -> Option<Target> {
     Some(row.into_target("lsblk:json"))
 }
 
-// --- scalar coercion --------------------------------------------------------
-
-/// A JSON scalar that may be a boolean, a number or a string.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum Scalar {
-    Bool(bool),
-    Unsigned(u64),
-    Signed(i64),
-    Text(String),
-}
-
-/// Deserialize an optional integer, accepting numbers and numeric strings.
-fn de_optional_u64<'de, D>(deserializer: D) -> std::result::Result<Option<u64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match Option::<Scalar>::deserialize(deserializer)? {
-        None => Ok(None),
-        Some(Scalar::Unsigned(value)) => Ok(Some(value)),
-        Some(Scalar::Signed(value)) => u64::try_from(value).map(Some).map_err(D::Error::custom),
-        Some(Scalar::Text(value)) if value.trim().is_empty() => Ok(None),
-        Some(Scalar::Text(value)) => value.trim().parse().map(Some).map_err(D::Error::custom),
-        Some(Scalar::Bool(_)) => Err(D::Error::custom("expected a number")),
-    }
-}
-
-/// Deserialize an optional flag, accepting booleans, numbers and strings.
-fn de_optional_bool<'de, D>(deserializer: D) -> std::result::Result<Option<bool>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(
-        Option::<Scalar>::deserialize(deserializer)?.map(|value| match value {
-            Scalar::Bool(value) => value,
-            Scalar::Unsigned(value) => value != 0,
-            Scalar::Signed(value) => value != 0,
-            Scalar::Text(value) => super::text_is_true(&value),
-        }),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,7 +115,6 @@ mod tests {
         "blockdevices": [
             {
                 "name": "/dev/sda",
-                "kname": "/dev/sda",
                 "label": null,
                 "partlabel": null,
                 "model": "Ultra USB",
@@ -200,19 +148,18 @@ mod tests {
             },
             {
                 "name": "/dev/nvme0n1",
-                "kname": "/dev/nvme0n1",
                 "model": "SAMSUNG",
                 "mountpoint": null,
                 "subsystems": "block:nvme:pci",
                 "tran": "nvme",
                 "type": "disk",
                 "pttype": "gpt",
-                "size": "1024209543168",
-                "phy-sec": "4096",
-                "log-sec": "512",
-                "ro": "0",
-                "rm": "0",
-                "hotplug": "0",
+                "size": 1024209543168,
+                "phy-sec": 4096,
+                "log-sec": 512,
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
                 "children": [
                     {
                         "name": "/dev/nvme0n1p1",
@@ -251,7 +198,6 @@ mod tests {
             },
             {
                 "name": "/dev/dm-0",
-                "kname": "/dev/dm-0",
                 "label": "vg-root",
                 "mountpoint": "/",
                 "subsystems": "block",
@@ -300,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_numeric_strings_and_system_disk() {
+    fn parses_system_disk() {
         let targets = targets();
         let system = &targets[1];
 
@@ -345,12 +291,5 @@ mod tests {
                 label: Some("vg-root".into()),
             }]
         );
-    }
-
-    #[test]
-    fn rejects_non_numeric_sizes() {
-        let error = serde_json::from_str::<LsblkDevice>(r#"{"name": "/dev/sda", "size": true}"#)
-            .unwrap_err();
-        assert!(error.to_string().contains("expected a number"));
     }
 }
