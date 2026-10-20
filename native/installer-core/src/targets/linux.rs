@@ -248,7 +248,7 @@ fn target_from_json(device: &LsblkDevice) -> Option<Target> {
         device: device_path,
         device_path: None,
         raw,
-        description: describe(device, &mountpoints),
+        description: describe(device),
         size: device.size,
         block_size: device.physical_block_size.unwrap_or(512),
         logical_block_size: device.logical_block_size.unwrap_or(512),
@@ -386,10 +386,10 @@ fn target_from_pairs(
             .map(|tran| tran.to_ascii_uppercase())
             .unwrap_or_else(|| "UNKNOWN".to_owned()),
         bus_version: None,
-        device: device_path,
+        device: device_path.clone(),
         device_path: None,
         raw: resolve_device(name),
-        description: describe_pairs(device, &mountpoints),
+        description: describe_pairs(device, &device_path.display().to_string()),
         size: device
             .get("size")
             .and_then(|value| value.trim().parse().ok()),
@@ -490,62 +490,39 @@ fn mountpoints(devices: &[LsblkDevice]) -> Vec<Mountpoint> {
 }
 
 /// Build the human readable description of a JSON device.
-fn describe(device: &LsblkDevice, mountpoints: &[Mountpoint]) -> String {
+fn describe(device: &LsblkDevice) -> String {
     let name = device.name.as_deref().unwrap_or_default();
     describe_parts(
         device.label.as_deref(),
         device.vendor.as_deref(),
         device.model.as_deref(),
-        mountpoints,
         name,
     )
 }
 
 /// Build the human readable description of a pairs device.
-fn describe_pairs(device: &HashMap<String, String>, mountpoints: &[Mountpoint]) -> String {
+fn describe_pairs(device: &HashMap<String, String>, fallback: &str) -> String {
     describe_parts(
         device.get("label").map(String::as_str),
         device.get("vendor").map(String::as_str),
         device.get("model").map(String::as_str),
-        mountpoints,
-        device.get("name").map(String::as_str).unwrap_or_default(),
+        fallback,
     )
 }
 
-/// Join labels, vendor and model, appending the labels of mounted partitions.
+/// Join labels, vendor and model into a single description.
 fn describe_parts(
     label: Option<&str>,
     vendor: Option<&str>,
     model: Option<&str>,
-    mountpoints: &[Mountpoint],
     fallback: &str,
 ) -> String {
-    let mut parts: Vec<String> = [label, vendor, model]
+    let description = [label, vendor, model]
         .into_iter()
         .flatten()
         .map(str::trim)
         .filter(|part| !part.is_empty())
-        .map(str::to_owned)
-        .collect();
-
-    let mut sublabels: Vec<String> = Vec::new();
-    for mountpoint in mountpoints {
-        let sublabel = mountpoint
-            .label
-            .as_deref()
-            .filter(|label| !label.is_empty())
-            .map(str::to_owned)
-            .unwrap_or_else(|| mountpoint.path.display().to_string());
-
-        if !sublabels.contains(&sublabel) {
-            sublabels.push(sublabel);
-        }
-    }
-    if !sublabels.is_empty() {
-        parts.push(format!("({})", sublabels.join(", ")));
-    }
-
-    let description = parts
+        .collect::<Vec<_>>()
         .join(" ")
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -738,7 +715,7 @@ mod tests {
         assert_eq!(usb.is_scsi, Some(false));
         assert!(!usb.is_system);
         assert!(!usb.is_virtual);
-        assert_eq!(usb.description, "SanDisk Ultra USB (DEEPIN)");
+        assert_eq!(usb.description, "SanDisk Ultra USB");
         assert_eq!(
             usb.mountpoints,
             vec![Mountpoint {
@@ -763,7 +740,7 @@ mod tests {
         assert_eq!(system.logical_block_size, 512);
         assert!(!system.is_removable);
         assert!(system.is_system);
-        assert_eq!(system.description, "SAMSUNG (EFI, /, /home)");
+        assert_eq!(system.description, "SAMSUNG");
         assert_eq!(
             system.mountpoints,
             vec![
@@ -851,7 +828,7 @@ NAME="sr0" MAJ:MIN="11:0" RM="1" SIZE="1048576" RO="0" TYPE="rom" MOUNTPOINT=""
         assert_eq!(system.partition_table, Some(PartitionTable::Gpt));
         assert!(system.is_system);
         assert!(!system.is_removable);
-        assert_eq!(system.description, "(EFI)");
+        assert_eq!(system.description, "/dev/sda");
         assert_eq!(system.mountpoints.len(), 1);
 
         let usb = &targets[1];
@@ -860,7 +837,7 @@ NAME="sr0" MAJ:MIN="11:0" RM="1" SIZE="1048576" RO="0" TYPE="rom" MOUNTPOINT=""
         assert_eq!(usb.is_usb, Some(true));
         assert!(usb.is_removable);
         assert!(!usb.is_system);
-        assert_eq!(usb.description, "SanDisk Ultra USB (DEEPIN)");
+        assert_eq!(usb.description, "SanDisk Ultra USB");
         assert_eq!(usb.mountpoints[0].path, PathBuf::from("/media/card"));
     }
 
