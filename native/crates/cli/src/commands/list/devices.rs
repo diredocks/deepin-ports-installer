@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use installer_core::text::contains_ignore_case;
-use installer_core::{Arch, DeviceGroup, DeviceIndex};
+use base::text::contains_ignore_case;
+use base::{Arch, DeviceGroup, DeviceIndex};
 
 use crate::cli::{ArchArg, FormatArg};
 use crate::render;

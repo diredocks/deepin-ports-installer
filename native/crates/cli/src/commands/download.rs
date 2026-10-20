@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 use humansize::{BINARY, format_size};
-use installer_core::date;
-use installer_core::download::{self, Progress};
-use installer_core::{DeviceIndex, ImageIndex, Query};
+use base::date;
+use base::download::{self, Progress};
+use base::{DeviceIndex, ImageIndex, Query};
 
 use crate::cli::{ArchArg, VariantArg};
 use crate::render;

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use installer_core::{TargetList, targets::Target};
+use base::{TargetList, targets::Target};
 
 use crate::cli::FormatArg;
 use crate::render::{self, OutputFormat};

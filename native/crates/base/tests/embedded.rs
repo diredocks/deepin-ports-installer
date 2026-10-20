@@ -1,4 +1,4 @@
-use installer_core::{DeviceIndex, ImageIndex};
+use base::{DeviceIndex, ImageIndex};
 
 #[test]
 fn parses_embedded_indexes() {

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 
-use installer_core::generate::{self, Options};
+use base::generate::{self, Options};
 
 #[derive(Debug, Args)]
 pub struct GenerateArgs {

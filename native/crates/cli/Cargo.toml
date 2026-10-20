@@ -1,5 +1,5 @@
 [package]
-name = "installer-cli"
+name = "cli"
 version.workspace = true
 edition.workspace = true
 
@@ -8,7 +8,7 @@ name = "deepin-ports-installer-cli"
 path = "src/main.rs"
 
 [dependencies]
-installer-core = { path = "../installer-core", features = ["cli", "generate"] }
+base = { path = "../base", features = ["cli", "generate"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 comfy-table = { version = "8", features = ["tty"] }

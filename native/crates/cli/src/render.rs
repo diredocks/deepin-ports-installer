@@ -3,7 +3,7 @@ use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
-use installer_core::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
+use base::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
 
 /// Output format selector (`--format`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]

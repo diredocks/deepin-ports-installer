@@ -83,6 +83,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "base"
+version = "0.1.0"
+dependencies = [
+ "astral-html",
+ "clap",
+ "directories",
+ "futures-util",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -167,6 +184,21 @@ name = "clap_lex"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
+
+[[package]]
+name = "cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base",
+ "clap",
+ "comfy-table",
+ "env_logger",
+ "humansize",
+ "indicatif",
+ "log",
+ "tokio",
+]
 
 [[package]]
 name = "colorchoice"
@@ -685,38 +717,6 @@ dependencies = [
  "unicode-width",
  "unit-prefix",
  "web-time",
-]
-
-[[package]]
-name = "installer-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "comfy-table",
- "env_logger",
- "humansize",
- "indicatif",
- "installer-core",
- "log",
- "tokio",
-]
-
-[[package]]
-name = "installer-core"
-version = "0.1.0"
-dependencies = [
- "astral-html",
- "clap",
- "directories",
- "futures-util",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "thiserror",
- "toml",
- "url",
 ]
 
 [[package]]

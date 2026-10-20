@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 
-pub use installer_core::Arch;
+pub use base::Arch;
 
 use crate::commands::{DownloadArgs, FlashArgs, GenerateArgs, ListArgs};
 use crate::logging::LogLevel;

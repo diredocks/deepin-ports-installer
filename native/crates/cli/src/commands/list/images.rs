@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use installer_core::text::contains_ignore_case;
-use installer_core::{Image, ImageGroup, ImageIndex};
+use base::text::contains_ignore_case;
+use base::{Image, ImageGroup, ImageIndex};
 
 use crate::cli::{ArchArg, FormatArg, VariantArg};
 use crate::render;
