@@ -4,7 +4,7 @@ use clap::Args;
 use installer_core::{TargetList, targets::Target};
 
 use crate::cli::FormatArg;
-use crate::render;
+use crate::render::{self, OutputFormat};
 
 #[derive(Debug, Args)]
 pub struct TargetsArgs {
@@ -26,6 +26,17 @@ pub fn run(args: TargetsArgs) -> Result<()> {
     } else {
         filter_flashable(targets)
     };
+
+    if targets.is_empty() && args.output.format == OutputFormat::Table {
+        if args.all {
+            log::info!("no local targets found");
+        } else {
+            log::info!(
+                "no removable targets found; use `--all` to include system and non-removable devices"
+            );
+        }
+        return Ok(());
+    }
 
     render::targets(&targets, args.output.format)
 }
