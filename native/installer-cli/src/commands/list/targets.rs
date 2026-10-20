@@ -18,21 +18,14 @@ pub struct TargetsArgs {
 
 pub fn run(args: TargetsArgs) -> Result<()> {
     let targets = TargetList::scan().context("failed to list local block devices")?;
-    let total = targets.len();
-    log::debug!("found {total} local target(s)");
+
+    log::debug!("found {} local target(s)", targets.len());
 
     let targets = if args.all {
         targets
     } else {
         filter_flashable(targets)
     };
-
-    if targets.len() != total {
-        log::debug!(
-            "hid {} system/removable-incompatible target(s); use `--all` to show them",
-            total - targets.len()
-        );
-    }
 
     if targets.is_empty() && args.output.format == OutputFormat::Table {
         if args.all {
