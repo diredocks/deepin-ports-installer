@@ -9,16 +9,16 @@ use crate::render;
 
 #[derive(Debug, Args)]
 pub struct DevicesArgs {
+    /// Only show devices matching this model
+    #[arg(value_name = "DEVICE")]
+    pub device: Option<String>,
+
     #[command(flatten)]
     pub arch: ArchArg,
 
-    /// Filter by SoC
+    /// Only show devices with this SoC
     #[arg(short, long, value_name = "SOC")]
     pub soc: Option<String>,
-
-    /// Filter by device model
-    #[arg(short, long, value_name = "DEVICE")]
-    pub device: Option<String>,
 
     #[command(flatten)]
     pub output: FormatArg,
@@ -32,7 +32,7 @@ pub fn run(args: DevicesArgs) -> Result<()> {
     let groups: Vec<DeviceGroup> = index
         .groups()
         .iter()
-        .filter(|group| matches(group, arch, args.soc.as_deref(), args.device.as_deref()))
+        .filter(|group| matches_filters(group, arch, args.soc.as_deref(), args.device.as_deref()))
         .cloned()
         .collect();
 
@@ -45,7 +45,7 @@ pub fn run(args: DevicesArgs) -> Result<()> {
     render::devices(&DeviceIndex::from(groups), format)
 }
 
-fn matches(
+fn matches_filters(
     group: &DeviceGroup,
     arch: Option<Arch>,
     soc: Option<&str>,

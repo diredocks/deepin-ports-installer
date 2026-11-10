@@ -7,7 +7,7 @@ use base::{DeviceIndex, ImageIndex, Query};
 use clap::Args;
 use humansize::{BINARY, format_size};
 
-use crate::cli::{ArchArg, VariantArg};
+use crate::cli::ImageFilterArgs;
 use crate::render;
 
 #[derive(Debug, Args)]
@@ -17,16 +17,9 @@ pub struct DownloadArgs {
     pub device: String,
 
     #[command(flatten)]
-    pub arch: ArchArg,
+    pub filters: ImageFilterArgs,
 
-    #[command(flatten)]
-    pub variant: VariantArg,
-
-    /// Pick the image published on this date (YYYYMMDD); defaults to the newest
-    #[arg(long, value_name = "YYYYMMDD")]
-    pub date: Option<String>,
-
-    /// Destination file or directory
+    /// Destination file or directory [default: the cache directory]
     #[arg(short, long, value_name = "PATH")]
     pub output: Option<PathBuf>,
 
@@ -35,15 +28,15 @@ pub struct DownloadArgs {
     pub force: bool,
 }
 
-pub fn run(args: DownloadArgs) -> Result<()> {
+pub fn run(args: DownloadArgs, quiet: bool) -> Result<()> {
     let images = ImageIndex::embedded().context("failed to load embedded image index")?;
     let devices = DeviceIndex::embedded().context("failed to load embedded device index")?;
 
     let query = Query {
         device: &args.device,
-        arch: args.arch.arch,
-        variant: args.variant.variant.as_deref(),
-        date: args.date.as_deref(),
+        arch: args.filters.arch,
+        variant: args.filters.variant.as_deref(),
+        date: args.filters.date.as_deref(),
     };
 
     let image = images
@@ -61,7 +54,7 @@ pub fn run(args: DownloadArgs) -> Result<()> {
         dest.display()
     );
 
-    let bar = render::download_bar(image.size);
+    let bar = render::download_bar(image.size, quiet);
     let mut last = 0;
 
     let progress = |progress: Progress| {

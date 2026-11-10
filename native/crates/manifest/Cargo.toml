@@ -1,0 +1,14 @@
+[package]
+name = "manifest"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "deepin-ports-manifest"
+path = "src/main.rs"
+
+[dependencies]
+base = { path = "../base", features = ["generate"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }

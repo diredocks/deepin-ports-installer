@@ -1,24 +1,27 @@
+mod devices;
 mod download;
 mod flash;
-mod generate;
-mod list;
+mod images;
+mod targets;
 
+pub use devices::DevicesArgs;
 pub use download::DownloadArgs;
 pub use flash::FlashArgs;
-pub use generate::GenerateArgs;
-pub use list::ListArgs;
+pub use images::ImagesArgs;
+pub use targets::TargetsArgs;
 
 use anyhow::Result;
 
 use crate::cli::{Cli, Command};
 
 pub fn run(cli: Cli) -> Result<()> {
-    log::trace!("parsed command: {:?}", cli.command);
+    let quiet = cli.global.quiet;
 
     match cli.command {
-        Command::List(args) => list::run(args),
-        Command::Download(args) => download::run(args),
+        Command::Devices(args) => devices::run(args),
+        Command::Images(args) => images::run(args),
+        Command::Targets(args) => targets::run(args),
+        Command::Download(args) => download::run(args, quiet),
         Command::Flash(args) => flash::run(args),
-        Command::Generate(args) => generate::run(args),
     }
 }

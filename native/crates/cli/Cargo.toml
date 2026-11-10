@@ -8,7 +8,7 @@ name = "deepin-ports-installer-cli"
 path = "src/main.rs"
 
 [dependencies]
-base = { path = "../base", features = ["cli", "generate"] }
+base = { path = "../base", features = ["cli", "http"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 comfy-table = { version = "8", features = ["tty"] }
@@ -17,3 +17,6 @@ humansize = "2"
 indicatif = "0.18"
 log = "0.4"
 tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

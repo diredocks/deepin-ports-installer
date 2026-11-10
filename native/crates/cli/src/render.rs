@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use anyhow::Result;
 use base::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
 use clap::ValueEnum;
@@ -15,14 +17,8 @@ pub enum OutputFormat {
 
 pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
     match format {
-        OutputFormat::Json => {
-            print!("{}", index.to_json()?);
-            Ok(())
-        }
-        OutputFormat::Toml => {
-            print!("{}", index.to_toml()?);
-            Ok(())
-        }
+        OutputFormat::Json => print_document(&index.to_json()?),
+        OutputFormat::Toml => print_document(&index.to_toml()?),
         OutputFormat::Table => {
             let rows = index.groups().iter().map(device_row).collect::<Vec<_>>();
             print_table(&["Arch", "SOC", "Platform", "Devices"], &rows);
@@ -33,14 +29,8 @@ pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
 
 pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
     match format {
-        OutputFormat::Json => {
-            print!("{}", index.to_json()?);
-            Ok(())
-        }
-        OutputFormat::Toml => {
-            print!("{}", index.to_toml()?);
-            Ok(())
-        }
+        OutputFormat::Json => print_document(&index.to_json()?),
+        OutputFormat::Toml => print_document(&index.to_toml()?),
         OutputFormat::Table => {
             let rows = index
                 .groups()
@@ -53,25 +43,10 @@ pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
     }
 }
 
-fn device_row(group: &DeviceGroup) -> Vec<String> {
-    vec![
-        group.arch.to_string(),
-        group.soc.clone(),
-        group.platform.clone(),
-        group.devices.join(", "),
-    ]
-}
-
 pub fn targets(list: &TargetList, format: OutputFormat) -> Result<()> {
     match format {
-        OutputFormat::Json => {
-            print!("{}", list.to_json()?);
-            Ok(())
-        }
-        OutputFormat::Toml => {
-            print!("{}", list.to_toml()?);
-            Ok(())
-        }
+        OutputFormat::Json => print_document(&list.to_json()?),
+        OutputFormat::Toml => print_document(&list.to_toml()?),
         OutputFormat::Table => {
             let rows = list.targets().iter().map(target_row).collect::<Vec<_>>();
             print_table(
@@ -91,6 +66,27 @@ pub fn targets(list: &TargetList, format: OutputFormat) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn device_row(group: &DeviceGroup) -> Vec<String> {
+    vec![
+        group.arch.to_string(),
+        group.soc.clone(),
+        group.platform.clone(),
+        group.devices.join(", "),
+    ]
+}
+
+fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
+    group.images.iter().map(move |image| {
+        vec![
+            group.arch.to_string(),
+            group.device.clone(),
+            image.variant.clone(),
+            image.date.clone(),
+            format_size(image.size, BINARY.decimal_places(1)),
+        ]
+    })
 }
 
 fn target_row(target: &Target) -> Vec<String> {
@@ -126,20 +122,28 @@ fn yes_no(value: bool) -> String {
     if value { "yes" } else { "no" }.to_owned()
 }
 
-fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
-    group.images.iter().map(move |image| {
-        vec![
-            group.arch.to_string(),
-            group.device.clone(),
-            image.variant.clone(),
-            image.date.clone(),
-            format_size(image.size, BINARY.decimal_places(1)),
-        ]
-    })
+/// Print a data document to standard output, ending with a newline.
+fn print_document(document: &str) -> Result<()> {
+    print!("{document}");
+    if !document.ends_with('\n') {
+        println!();
+    }
+    Ok(())
 }
 
-/// Print a Markdown-style table with a header row.
+/// Print a table, or tab-separated columns when the output is not a terminal.
+///
+/// Piped output must stay machine readable: no borders, no terminal-width
+/// wrapping, one record per line.
 fn print_table(headers: &[&str], rows: &[Vec<String>]) {
+    if std::io::stdout().is_terminal() {
+        print_fancy_table(headers, rows);
+    } else {
+        print_plain_table(headers, rows);
+    }
+}
+
+fn print_fancy_table(headers: &[&str], rows: &[Vec<String>]) {
     let mut table = Table::new();
     table.load_style(presets::ASCII_MARKDOWN);
     table.set_content_arrangement(ContentArrangement::Dynamic);
@@ -152,8 +156,19 @@ fn print_table(headers: &[&str], rows: &[Vec<String>]) {
     println!("{}", table.trim_fmt());
 }
 
+fn print_plain_table(headers: &[&str], rows: &[Vec<String>]) {
+    println!("{}", headers.join("\t"));
+    for row in rows {
+        println!("{}", row.join("\t"));
+    }
+}
+
 /// A progress bar tracking a download of `total` bytes on stderr.
-pub fn download_bar(total: u64) -> ProgressBar {
+pub fn download_bar(total: u64, quiet: bool) -> ProgressBar {
+    if quiet {
+        return ProgressBar::hidden();
+    }
+
     let bar = ProgressBar::new(total);
     bar.set_style(
         ProgressStyle::with_template(

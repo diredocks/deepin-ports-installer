@@ -1,43 +1,31 @@
-use clap::ValueEnum;
+use std::io::Write;
 
 use crate::cli::GlobalArgs;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum LogLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
-}
-
-impl From<LogLevel> for log::LevelFilter {
-    fn from(level: LogLevel) -> Self {
-        match level {
-            LogLevel::Error => log::LevelFilter::Error,
-            LogLevel::Warn => log::LevelFilter::Warn,
-            LogLevel::Info => log::LevelFilter::Info,
-            LogLevel::Debug => log::LevelFilter::Debug,
-            LogLevel::Trace => log::LevelFilter::Trace,
-        }
-    }
-}
-
 /// Initialise `env_logger` according to the global verbosity flags.
+///
+/// `RUST_LOG` still overrides both flags, for users who need per-module
+/// filtering.
 pub fn init(global: &GlobalArgs) {
-    let level = match (&global.log_level, global.quiet, global.verbose) {
-        (Some(level), ..) => (*level).into(),
-        (None, true, _) => log::LevelFilter::Error,
-        (None, false, 0) => log::LevelFilter::Info,
-        (None, false, 1) => log::LevelFilter::Debug,
-        (None, false, _) => log::LevelFilter::Trace,
+    let level = if global.quiet {
+        log::LevelFilter::Error
+    } else {
+        match global.verbose {
+            0 => log::LevelFilter::Info,
+            1 => log::LevelFilter::Debug,
+            _ => log::LevelFilter::Trace,
+        }
     };
 
     env_logger::Builder::new()
         .filter_level(level)
         .format_timestamp(None)
+        .format_target(false)
         .parse_default_env()
+        .format(|buf, record| match record.level() {
+            log::Level::Error => writeln!(buf, "error: {}", record.args()),
+            log::Level::Warn => writeln!(buf, "warning: {}", record.args()),
+            _ => writeln!(buf, "{}", record.args()),
+        })
         .init();
-
-    log::trace!("log level set to {level:?}");
 }
