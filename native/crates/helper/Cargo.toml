@@ -1,0 +1,11 @@
+[package]
+name = "helper"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "deepin-ports-installer-helper"
+path = "src/main.rs"
+
+[dependencies]
+base = { path = "../base", features = ["privileged"] }

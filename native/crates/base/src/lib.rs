@@ -8,6 +8,8 @@ pub mod generate;
 pub mod http;
 pub mod images;
 pub mod paths;
+#[cfg(feature = "privileged")]
+pub mod privileged;
 pub mod targets;
 pub mod text;
 
@@ -131,6 +133,52 @@ pub enum Error {
     /// Target enumeration is not implemented for this platform.
     #[error("listing flash targets is not supported on this platform")]
     UnsupportedPlatform,
+
+    /// The privileged helper could not be spawned.
+    #[cfg(feature = "privileged")]
+    #[error("failed to start `{program}`")]
+    HelperSpawn {
+        /// Program that could not be spawned.
+        program: String,
+
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// An I/O operation involving the privileged helper failed.
+    #[cfg(feature = "privileged")]
+    #[error("privileged helper I/O failed")]
+    HelperIo(#[source] std::io::Error),
+
+    /// No supported privilege escalation mechanism is available.
+    #[cfg(feature = "privileged")]
+    #[error("no supported privilege escalation mechanism is available")]
+    HelperElevationUnavailable,
+
+    /// The privileged helper did not announce its WebSocket address.
+    #[cfg(feature = "privileged")]
+    #[error("the privileged helper exited without announcing its WebSocket address")]
+    HelperNoHandshake,
+
+    /// The privileged helper timed out waiting for the client to connect.
+    #[cfg(feature = "privileged")]
+    #[error("timed out waiting for the privileged client")]
+    HelperTimeout,
+
+    /// The WebSocket session with the privileged helper failed.
+    #[cfg(feature = "privileged")]
+    #[error("privileged helper websocket failed")]
+    HelperWebSocket(#[source] tungstenite::Error),
+
+    /// A privileged helper message did not match the protocol.
+    #[cfg(feature = "privileged")]
+    #[error("privileged helper protocol error: {0}")]
+    HelperProtocol(String),
+
+    /// The privileged helper refused or failed an operation.
+    #[cfg(feature = "privileged")]
+    #[error("privileged helper reported an error: {0}")]
+    HelperReported(String),
 
     /// An architecture slug is not one of the known values.
     #[error("unknown architecture `{0}`")]
