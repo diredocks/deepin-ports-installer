@@ -15,8 +15,8 @@ use crate::date;
 use crate::http;
 use crate::{Arch, Error, Image, ImageGroup, ImageIndex, Result};
 
-/// Default repository that hosts the Deepin Ports images.
-pub const DEFAULT_BASE: &str = "https://ci.deepin.com/repo/deepin/deepin-ports/cdimage";
+/// Repository that hosts the Deepin Ports images.
+const BASE: &str = "https://ci.deepin.com/repo/deepin/deepin-ports/cdimage";
 
 /// Default number of concurrent listing requests.
 pub const DEFAULT_CONCURRENCY: usize = 4;
@@ -24,9 +24,6 @@ pub const DEFAULT_CONCURRENCY: usize = 4;
 /// Settings for [`image_index`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
-    /// Base URL of the Deepin Ports image repository.
-    pub base: String,
-
     /// Maximum number of concurrent HTTP requests.
     pub concurrency: usize,
 }
@@ -34,15 +31,14 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            base: DEFAULT_BASE.to_owned(),
             concurrency: DEFAULT_CONCURRENCY,
         }
     }
 }
 
-/// Crawl the repository configured by `options` and build an image index.
+/// Crawl the image repository and build an image index.
 pub async fn image_index(options: &Options) -> Result<ImageIndex> {
-    let base = options.base.trim_end_matches('/');
+    let base = BASE.trim_end_matches('/');
     let concurrency = options.concurrency.max(1);
 
     let dates: Vec<String> = parse_index(&http::get(&format!("{base}/")).await?)?

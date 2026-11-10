@@ -7,10 +7,6 @@ use base::generate::{self, Options};
 
 #[derive(Debug, Args)]
 pub struct GenerateArgs {
-    /// Base URL of the Deepin Ports image repository
-    #[arg(long, value_name = "URL", default_value = generate::DEFAULT_BASE)]
-    pub base: String,
-
     /// Write the manifest to this file instead of standard output
     #[arg(short, long, value_name = "PATH")]
     pub output: Option<PathBuf>,
@@ -22,7 +18,6 @@ pub struct GenerateArgs {
 
 pub fn run(args: GenerateArgs) -> Result<()> {
     let options = Options {
-        base: args.base,
         concurrency: args.concurrency,
     };
 

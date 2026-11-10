@@ -37,7 +37,7 @@ pub struct FlashArgs {
     clap::ArgGroup::new("source")
         .required(true)
         .multiple(false)
-        .args(["device", "image", "url"])
+        .args(["device", "image"])
 ))]
 pub struct ImageSource {
     /// Resolve and flash the latest image for this device model
@@ -47,10 +47,6 @@ pub struct ImageSource {
     /// Use a local image file
     #[arg(long, value_name = "PATH")]
     pub image: Option<PathBuf>,
-
-    /// Use a remote image URL
-    #[arg(long, value_name = "URL")]
-    pub url: Option<String>,
 
     #[command(flatten)]
     pub variant: VariantArg,
