@@ -9,18 +9,19 @@ use std::process::{Child, Command, Stdio};
 
 use crate::{Error, Result};
 
-/// Path of the polkit elevation program.
-const PKEXEC: &str = "/usr/bin/pkexec";
+/// Candidate paths of the polkit elevation program.
+const PKEXEC_CANDIDATES: &[&str] = &["/usr/bin/pkexec", "/run/wrappers/bin/pkexec"];
 
 /// Spawn the helper, through `pkexec` unless we are already root.
 pub(crate) fn spawn_helper(program: &Path, elevate: bool) -> Result<Child> {
     // SAFETY: `geteuid` has no preconditions and cannot fail.
     let elevate = elevate && unsafe { libc::geteuid() } != 0;
-    let launcher = if elevate { Path::new(PKEXEC) } else { program };
 
-    if elevate && !launcher.is_file() {
-        return Err(Error::HelperElevationUnavailable);
-    }
+    let launcher = if elevate {
+        pkexec().ok_or(Error::HelperElevationUnavailable)?
+    } else {
+        program
+    };
 
     let mut command = Command::new(launcher);
     if elevate {
@@ -36,6 +37,14 @@ pub(crate) fn spawn_helper(program: &Path, elevate: bool) -> Result<Child> {
             program: launcher.display().to_string(),
             source,
         })
+}
+
+/// First installed `pkexec` candidate.
+fn pkexec() -> Option<&'static Path> {
+    PKEXEC_CANDIDATES
+        .iter()
+        .map(Path::new)
+        .find(|path| path.is_file())
 }
 
 /// Generate a 256 bit token from `/dev/urandom`, hex encoded.
