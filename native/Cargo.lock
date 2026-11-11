@@ -78,7 +78,9 @@ name = "archive"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "fsx",
  "tar",
+ "testutils",
  "thiserror",
  "xz2",
 ]
@@ -142,8 +144,10 @@ name = "catalog"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "fsx",
  "serde",
  "serde_json",
+ "testutils",
  "thiserror",
  "toml",
 ]
@@ -179,7 +183,9 @@ dependencies = [
 name = "checksum"
 version = "0.1.0"
 dependencies = [
+ "fsx",
  "sha2",
+ "testutils",
  "thiserror",
 ]
 
@@ -523,6 +529,7 @@ name = "fetch"
 version = "0.1.0"
 dependencies = [
  "directories",
+ "fsx",
  "reqwest",
  "rustls",
  "thiserror",
@@ -552,10 +559,9 @@ dependencies = [
  "archive",
  "catalog",
  "checksum",
- "sha2",
- "tar",
+ "fsx",
+ "testutils",
  "thiserror",
- "xz2",
 ]
 
 [[package]]
@@ -576,6 +582,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fsx"
+version = "0.1.0"
+dependencies = [
+ "testutils",
+ "thiserror",
 ]
 
 [[package]]
@@ -1080,10 +1094,12 @@ name = "manifest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "archive",
  "astral-html",
  "catalog",
  "clap",
  "fetch",
+ "fsx",
  "futures-util",
  "thiserror",
  "tokio",
@@ -1735,6 +1751,15 @@ checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
 dependencies = [
  "filetime",
  "libc",
+]
+
+[[package]]
+name = "testutils"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "tar",
+ "xz2",
 ]
 
 [[package]]

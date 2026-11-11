@@ -5,6 +5,10 @@ edition.workspace = true
 
 [dependencies]
 flate2 = "1"
+fsx = { path = "../fsx" }
 tar = { version = "0.4", default-features = false }
 thiserror = "2"
 xz2 = { version = "0.1", features = ["static"] }
+
+[dev-dependencies]
+testutils = { path = "../testutils" }

@@ -3,13 +3,11 @@
 use std::io::Read;
 use std::path::Path;
 
+use fsx::Amount;
 use sha2::{Digest as _, Sha256};
 
 use crate::manifest::Manifest;
 use crate::{Error, Result};
-
-/// Read buffer used while hashing.
-const BUFFER_SIZE: usize = 1024 * 1024;
 
 /// The manifest that covers `file`, with the checksum it records.
 pub fn manifest_for<'a>(manifests: &'a [Manifest], file: &Path) -> Option<(&'a Manifest, &'a str)> {
@@ -21,10 +19,10 @@ pub fn manifest_for<'a>(manifests: &'a [Manifest], file: &Path) -> Option<(&'a M
 /// Verify `file` against the manifest that covers it.
 ///
 /// A file no manifest covers is left alone. `progress` receives the number of
-/// bytes hashed so far in this file.
+/// bytes hashed so far in this file, and its size as the total.
 pub fn verify<F>(file: &Path, manifests: &[Manifest], progress: F) -> Result<()>
 where
-    F: FnMut(u64),
+    F: FnMut(Amount),
 {
     let Some((_, expected)) = manifest_for(manifests, file) else {
         return Ok(());
@@ -45,32 +43,27 @@ where
 
 /// Compute the SHA-256 digest of `file`, reporting the number of bytes hashed
 /// so far.
-fn hash<F>(file: &Path, mut progress: F) -> Result<String>
+fn hash<F>(file: &Path, progress: F) -> Result<String>
 where
-    F: FnMut(u64),
+    F: FnMut(Amount),
 {
-    let mut reader = std::fs::File::open(file).map_err(|source| Error::Read {
-        path: file.to_path_buf(),
-        source,
-    })?;
+    let handle = fsx::open(file)?;
+    let total = handle.metadata().ok().map(|metadata| metadata.len());
+    let mut reader = fsx::Chunked::new(handle, total, progress);
 
     let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; BUFFER_SIZE];
-    let mut done = 0;
+    let mut buffer = vec![0u8; fsx::BUFFER_SIZE];
 
     loop {
-        let read = reader.read(&mut buffer).map_err(|source| Error::Read {
-            path: file.to_path_buf(),
-            source,
-        })?;
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|source| fsx::Error::read(file, source))?;
 
         if read == 0 {
             break;
         }
 
         hasher.update(&buffer[..read]);
-        done += read as u64;
-        progress(done);
     }
 
     Ok(hex(hasher.finalize().as_slice()))
@@ -90,20 +83,11 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A fresh, empty directory for one test.
-    fn workspace(name: &str) -> std::path::PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("deepin-ports-verify-{}-{name}", std::process::id()));
-
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).unwrap();
-        path
-    }
+    use testutils::Workspace;
 
     #[test]
     fn computes_matches_coreutils() {
-        let root = workspace("coreutils");
+        let root = Workspace::new("deepin-ports-checksum", "coreutils");
         let path = root.join("empty.bin");
         std::fs::write(&path, b"").unwrap();
 
@@ -114,13 +98,11 @@ mod tests {
         );
 
         verify(&path, &[manifest], |_| {}).unwrap();
-
-        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
     fn reports_mismatches() {
-        let root = workspace("mismatch");
+        let root = Workspace::new("deepin-ports-checksum", "mismatch");
         let path = root.join("image.img");
         std::fs::write(&path, b"payload").unwrap();
 
@@ -133,19 +115,30 @@ mod tests {
             verify(&path, &[manifest], |_| {}),
             Err(Error::Mismatch { .. })
         ));
-
-        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
     fn leaves_uncovered_files_alone() {
-        let root = workspace("uncovered");
+        let root = Workspace::new("deepin-ports-checksum", "uncovered");
         let path = root.join("image.img");
         std::fs::write(&path, b"payload").unwrap();
 
         assert!(manifest_for(&[], &path).is_none());
         verify(&path, &[], |_| {}).unwrap();
+    }
 
-        std::fs::remove_dir_all(&root).unwrap();
+    #[test]
+    fn reports_the_bytes_hashed() {
+        let root = Workspace::new("deepin-ports-checksum", "progress");
+        let path = root.join("image.img");
+        std::fs::write(&path, b"payload").unwrap();
+
+        let manifest = Manifest::parse(root.join("image.img.sha256"), &"0".repeat(64));
+        let mut reports = Vec::new();
+
+        let _ = verify(&path, &[manifest], |amount| reports.push(amount));
+
+        assert_eq!(reports.last(), Some(&Amount::new(7, Some(7))));
+        assert!(reports.iter().all(|amount| amount.total == Some(7)));
     }
 }

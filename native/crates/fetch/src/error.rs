@@ -3,21 +3,9 @@ use std::path::PathBuf;
 /// Errors produced while fetching files.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Reading a file from disk failed.
-    #[error("failed to read `{path}`")]
-    Io {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    /// Writing a file to disk failed.
-    #[error("failed to write `{path}`")]
-    Write {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    /// A file or directory could not be read or written.
+    #[error(transparent)]
+    Io(#[from] fsx::Error),
 
     /// The destination already exists and overwriting was not requested.
     #[error("`{path}` already exists (use `--force` to overwrite)")]

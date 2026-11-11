@@ -124,10 +124,7 @@ impl Manifest {
             });
         }
 
-        let text = std::fs::read_to_string(path).map_err(|source| Error::Read {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let text = fsx::read_to_string(path)?;
 
         Ok(Self::parse(path.to_path_buf(), &text))
     }
@@ -160,29 +157,7 @@ impl Manifest {
     /// The directory is not searched recursively; callers that need manifests
     /// below the top level collect the paths themselves and use [`load`](Self::load).
     pub fn in_directory(directory: &Path) -> Result<Vec<Self>> {
-        let mut paths = Vec::new();
-
-        for entry in std::fs::read_dir(directory).map_err(|source| Error::Read {
-            path: directory.to_path_buf(),
-            source,
-        })? {
-            let entry = entry.map_err(|source| Error::Read {
-                path: directory.to_path_buf(),
-                source,
-            })?;
-
-            let file_type = entry.file_type().map_err(|source| Error::Read {
-                path: entry.path(),
-                source,
-            })?;
-
-            if file_type.is_file() {
-                paths.push(entry.path());
-            }
-        }
-
-        paths.sort();
-        Self::load(paths)
+        Self::load(fsx::files_in(directory)?)
     }
 
     pub(crate) fn parse(path: PathBuf, text: &str) -> Self {
@@ -229,6 +204,7 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use testutils::Workspace;
 
     /// A syntactically valid digest, for parser tests.
     fn fake() -> String {
@@ -354,10 +330,7 @@ mod tests {
 
     #[test]
     fn loads_only_manifests_from_paths() {
-        let root =
-            std::env::temp_dir().join(format!("deepin-ports-manifest-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
+        let root = Workspace::new("deepin-ports-manifest", "loads");
 
         let sum = fake();
         std::fs::write(root.join("image.img"), b"payload").unwrap();
@@ -371,16 +344,11 @@ mod tests {
             manifests[0].digest(Path::new("image.img")),
             Some(sum.as_str())
         );
-
-        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
     fn loads_manifests_from_a_directory() {
-        let root =
-            std::env::temp_dir().join(format!("deepin-ports-in-directory-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
+        let root = Workspace::new("deepin-ports-manifest", "in-directory");
 
         let sum = fake();
         std::fs::write(root.join("image.tar.xz"), b"payload").unwrap();
@@ -399,8 +367,6 @@ mod tests {
 
         let manifests = Manifest::in_directory(&root).unwrap();
         assert_eq!(manifests.len(), 2);
-
-        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

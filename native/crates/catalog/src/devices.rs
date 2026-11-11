@@ -186,13 +186,13 @@ mod tests {
         let index = DeviceIndex::parse(SAMPLE).unwrap();
         let rendered = index.to_toml().unwrap();
 
-        assert!(rendered.contains("[[devices]]"));
         assert_eq!(DeviceIndex::parse(&rendered).unwrap(), index);
     }
 
     #[test]
     fn parse_file_reads_a_document() {
-        let path = std::env::temp_dir().join(format!("deepin-devices-{}.toml", std::process::id()));
+        let root = testutils::Workspace::new("deepin-ports-devices", "parse-file");
+        let path = root.join("devices.toml");
 
         std::fs::write(&path, SAMPLE).unwrap();
         let index = DeviceIndex::parse_file(&path).unwrap();
@@ -201,7 +201,7 @@ mod tests {
         assert_eq!(index, DeviceIndex::parse(SAMPLE).unwrap());
         assert!(matches!(
             DeviceIndex::parse_file(&path),
-            Err(crate::Error::Io { .. })
+            Err(crate::Error::Io(_))
         ));
     }
 

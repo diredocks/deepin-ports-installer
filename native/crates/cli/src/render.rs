@@ -196,9 +196,9 @@ fn progress_bar(total: u64, quiet: bool) -> ProgressBar {
 pub fn prepare_progress(bar: &ProgressBar, progress: &flash::Progress) {
     bar.set_message(progress.phase.as_str());
 
-    if let Some(total) = progress.total {
+    if let Some(total) = progress.amount.total {
         bar.set_length(total);
     }
 
-    bar.set_position(progress.done);
+    bar.set_position(progress.amount.done);
 }

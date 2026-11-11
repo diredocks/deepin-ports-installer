@@ -61,16 +61,14 @@ pub fn run(args: DownloadArgs, quiet: bool) -> Result<()> {
         if let Some(total) = progress.total {
             bar.set_length(total);
         }
-        bar.set_position(progress.downloaded);
+        bar.set_position(progress.done);
 
         if bar.is_hidden()
-            && let Some(total) = progress.total.filter(|total| *total > 0)
+            && let Some(percent) = progress.percent()
+            && percent >= last + 10
         {
-            let percent = progress.downloaded.saturating_mul(100) / total;
-            if percent >= last + 10 {
-                last = percent;
-                log::info!("{percent}%");
-            }
+            last = percent;
+            log::info!("{percent}%");
         }
     };
 

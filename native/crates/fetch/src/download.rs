@@ -3,10 +3,15 @@
 
 use std::path::{Path, PathBuf};
 
+use fsx::{Mode, Sibling};
 use url::Url;
 
 use crate::paths;
 use crate::{Error, Result};
+
+/// Progress reported while downloading: bytes written so far, and the size of
+/// the file when it is known.
+pub use fsx::Amount as Progress;
 
 /// Resolve where a download from `url` should be written.
 ///
@@ -22,16 +27,6 @@ pub fn destination(output: Option<&Path>, url: &str) -> Result<PathBuf> {
         Some(path) if paths::is_directory(path) => Ok(path.join(file_name)),
         Some(path) => Ok(path.to_path_buf()),
     }
-}
-
-/// Progress reported while downloading.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Progress {
-    /// Bytes written so far.
-    pub downloaded: u64,
-
-    /// Total size in bytes, when known.
-    pub total: Option<u64>,
 }
 
 /// Download `url` to `dest`, calling `progress` as data arrives.
@@ -58,42 +53,32 @@ where
         });
     }
 
-    if let Some(parent) = dest
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        std::fs::create_dir_all(parent).map_err(|source| Error::Io {
-            path: parent.to_path_buf(),
-            source,
-        })?;
-    }
+    fsx::create_parents(dest)?;
 
-    let temp = temp_path(dest);
+    let temporary = Sibling::new(dest, Mode::Keep);
+    let temp = temporary.path();
     let expected = (size > 0).then_some(size);
 
     // Resume wherever a previous run stopped, unless the leftover is already
     // as large as the file we expect (a stale partial from another build).
-    let mut offset = partial_size(&temp);
+    let mut offset = partial_size(temp);
     if expected.is_some_and(|total| offset >= total) {
-        let _ = std::fs::remove_file(&temp);
+        let _ = std::fs::remove_file(temp);
         offset = 0;
     }
 
     let response = crate::http::response_from(url, offset).await?;
-    let (response, offset) = reconcile(response, url, &temp, offset).await?;
+    let (response, offset) = reconcile(response, url, temp, offset).await?;
 
     let total = response
         .content_length()
         .map(|length| length + offset)
         .or(expected);
 
-    let mut file = open_partial(&temp, offset)?;
-    progress(Progress {
-        downloaded: offset,
-        total,
-    });
+    let mut file = open_partial(temp, offset)?;
+    progress(Progress::new(offset, total));
 
-    let written = match write_body(&mut file, response, &temp, url, offset, total, progress).await {
+    let written = match write_body(&mut file, response, temp, url, offset, total, progress).await {
         Ok(written) => written,
         Err(error) => {
             let _ = std::io::Write::flush(&mut file);
@@ -103,7 +88,7 @@ where
 
     if let Err(source) = std::io::Write::flush(&mut file) {
         drop(file);
-        return Err(Error::Write { path: temp, source });
+        return Err(fsx::Error::write(temp, source).into());
     }
     drop(file);
 
@@ -117,18 +102,7 @@ where
         });
     }
 
-    if force && dest.exists() {
-        std::fs::remove_file(dest).map_err(|source| Error::Write {
-            path: dest.to_path_buf(),
-            source,
-        })?;
-    }
-
-    std::fs::rename(&temp, dest).map_err(|source| Error::Write {
-        path: dest.to_path_buf(),
-        source,
-    })?;
-
+    temporary.commit_file(dest)?;
     Ok(())
 }
 
@@ -215,10 +189,7 @@ fn open_partial(path: &Path, offset: u64) -> Result<std::fs::File> {
         std::fs::OpenOptions::new().append(true).open(path)
     };
 
-    file.map_err(|source| Error::Write {
-        path: path.to_path_buf(),
-        source,
-    })
+    file.map_err(|source| fsx::Error::write(path, source).into())
 }
 
 fn partial_size(path: &Path) -> u64 {
@@ -254,13 +225,11 @@ where
         url: url.to_owned(),
         source,
     })? {
-        file.write_all(&chunk).map_err(|source| Error::Write {
-            path: dest.to_path_buf(),
-            source,
-        })?;
+        file.write_all(&chunk)
+            .map_err(|source| fsx::Error::write(dest, source))?;
 
         downloaded += chunk.len() as u64;
-        progress(Progress { downloaded, total });
+        progress(Progress::new(downloaded, total));
     }
 
     Ok(downloaded)
@@ -273,18 +242,6 @@ fn file_name(link: &str) -> Option<String> {
         .next_back()
         .filter(|name| !name.is_empty())
         .map(str::to_owned)
-}
-
-/// A stable temporary sibling of `dest`, used both for the in-flight download
-/// and to resume an interrupted one on a later run.
-fn temp_path(dest: &Path) -> PathBuf {
-    let mut name = std::ffi::OsString::from(".");
-    name.push(dest.file_name().map_or_else(
-        || std::ffi::OsString::from("download"),
-        |name| name.to_os_string(),
-    ));
-    name.push(".part");
-    dest.with_file_name(name)
 }
 
 #[cfg(test)]
@@ -333,12 +290,6 @@ mod tests {
             destination(None, "https://e/"),
             Err(Error::LinkFileName(_))
         ));
-    }
-
-    #[test]
-    fn temporary_path_is_a_sibling() {
-        let temp = temp_path(Path::new("/tmp/image.tar.xz"));
-        assert_eq!(temp, Path::new("/tmp/.image.tar.xz.part"));
     }
 
     #[test]

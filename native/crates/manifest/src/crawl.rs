@@ -6,7 +6,7 @@
 //! into an [`Image`] record, mirroring `ref/update-image.js`.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use astral_html::Document;
 use futures_util::stream::{self, StreamExt, TryStreamExt};
@@ -29,13 +29,9 @@ pub enum Error {
     #[error(transparent)]
     Index(#[from] catalog::Error),
 
-    /// Writing the manifest to disk failed.
-    #[error("failed to write `{path}`")]
-    Write {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    /// The manifest could not be written to disk.
+    #[error(transparent)]
+    Io(#[from] fsx::Error),
 }
 
 /// Convenience alias used across this module.
@@ -133,12 +129,9 @@ pub async fn image_index(options: &Options) -> Result<ImageIndex> {
 }
 
 pub fn write_file(index: &ImageIndex, path: impl AsRef<Path>) -> Result<()> {
-    let path = path.as_ref();
     let document = index.to_toml()?;
-    std::fs::write(path, document).map_err(|source| Error::Write {
-        path: path.to_path_buf(),
-        source,
-    })
+    fsx::write(path.as_ref(), document)?;
+    Ok(())
 }
 
 /// A single file matched while crawling, before it is grouped.
@@ -251,14 +244,17 @@ fn record_from(
 }
 
 /// Strip a known image file extension, or `None` for other files.
+///
+/// The tar suffixes come from [`archive`], so the crawler accepts exactly the
+/// archives the installer can unpack; an ISO is a published image but not an
+/// archive.
 fn image_stem(name: &str) -> Option<&str> {
-    [".tar.xz", ".tar.gz", ".iso"]
-        .into_iter()
-        .find_map(|extension| name.strip_suffix(extension))
+    archive::stem(name).or_else(|| name.strip_suffix(".iso"))
 }
 
+/// Whether an image is a tar archive published for one device.
 fn is_archive(name: &str) -> bool {
-    name.ends_with(".tar.xz") || name.ends_with(".tar.gz")
+    archive::is_archive(name)
 }
 
 /// Derive the device slug from a file name split on `-`.
@@ -313,6 +309,18 @@ mod tests {
         assert!(is_date_dir(&entry("20250625/", 0)));
         assert!(!is_date_dir(&entry("treeland/", 0)));
         assert!(!is_date_dir(&entry("20250625", 0)));
+    }
+
+    #[test]
+    fn recognizes_archives_through_the_archive_crate() {
+        assert!(is_archive("deepin-25-crimson-preview-riscv64-k1.txz"));
+        assert!(!is_archive("deepin-25-crimson-preview-riscv64-k1.iso"));
+
+        assert_eq!(
+            image_stem("deepin-25-crimson-preview-riscv64-k1.iso"),
+            Some("deepin-25-crimson-preview-riscv64-k1")
+        );
+        assert_eq!(image_stem("md5sum_riscv64.txt"), None);
     }
 
     #[test]

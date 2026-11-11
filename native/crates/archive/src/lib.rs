@@ -8,28 +8,19 @@
 
 mod extract;
 
-pub use extract::{Archive, Progress};
+pub use extract::{Archive, is_archive, stem};
 
 use std::path::PathBuf;
+
+/// Progress reported while unpacking: compressed bytes consumed so far.
+pub use fsx::Amount as Progress;
 
 /// Errors produced while unpacking an archive.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// An archive could not be read or unpacked.
-    #[error("failed to read `{path}`")]
-    Read {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    /// An extracted file or directory could not be written.
-    #[error("failed to write `{path}`")]
-    Write {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    /// An archive or a directory could not be read or written.
+    #[error(transparent)]
+    Io(#[from] fsx::Error),
 
     /// An archive member would be extracted outside the destination.
     #[error("archive member `{path}` escapes the extraction directory")]

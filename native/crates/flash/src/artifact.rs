@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::{Error, Result};
+use crate::Result;
 
 /// Role an artifact plays when flashing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -97,10 +97,7 @@ impl Artifact {
             return Ok(None);
         };
 
-        let metadata = std::fs::metadata(path).map_err(|source| Error::Read {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let metadata = fsx::metadata(path)?;
 
         if !metadata.is_file() {
             return Ok(None);

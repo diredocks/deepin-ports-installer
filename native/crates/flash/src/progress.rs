@@ -1,5 +1,7 @@
 //! Progress reported while preparing an image.
 
+use fsx::Amount;
+
 /// Stage of [`prepare`](crate::prepare) a [`Progress`] report belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
@@ -21,14 +23,14 @@ impl Phase {
 }
 
 /// Work [`prepare`](crate::prepare) has done in its current phase.
+///
+/// The byte counts are the shared [`Amount`], so a frontend renders extraction,
+/// verification and downloading progress the same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Progress {
     /// Phase being reported.
     pub phase: Phase,
 
-    /// Bytes processed so far in this phase.
-    pub done: u64,
-
-    /// Total bytes expected in this phase, when known.
-    pub total: Option<u64>,
+    /// Bytes processed so far in this phase, and the total expected in it.
+    pub amount: Amount,
 }

@@ -1,0 +1,10 @@
+[package]
+name = "fsx"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = "2"
+
+[dev-dependencies]
+testutils = { path = "../testutils" }

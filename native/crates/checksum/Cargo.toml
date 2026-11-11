@@ -4,5 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+fsx = { path = "../fsx" }
 sha2 = "0.11"
 thiserror = "2"
+
+[dev-dependencies]
+testutils = { path = "../testutils" }

@@ -1,13 +1,11 @@
 //! Streaming tar archives through a decompressor into a directory.
 
-use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use crate::{Error, Result};
+use fsx::{Mode, Sibling};
 
-/// Read buffer used while unpacking.
-const BUFFER_SIZE: usize = 1024 * 1024;
+use crate::{Error, Progress, Result};
 
 /// Compression applied to a tar archive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,30 +25,31 @@ const SUFFIXES: [(&str, Compression); 5] = [
     (".tar", Compression::Tar),
 ];
 
-/// Work done while unpacking an archive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Progress {
-    /// Compressed bytes consumed so far.
-    pub done: u64,
+/// Split an archive file name into its stem and compression.
+fn split(name: &str) -> Option<(&str, Compression)> {
+    let lower = name.to_ascii_lowercase();
+    let (suffix, compression) = SUFFIXES
+        .iter()
+        .find(|(suffix, _)| lower.ends_with(suffix))?;
 
-    /// Size of the archive in bytes, when known.
-    pub total: Option<u64>,
+    // The suffix is ASCII, so removing its byte length cannot split a
+    // multi-byte character of `name`.
+    let stem = &name[..name.len() - suffix.len()];
+
+    (!stem.is_empty()).then_some((stem, *compression))
 }
 
-/// Direction of the I/O operation an [`Error`] describes.
-#[derive(Debug, Clone, Copy)]
-enum IoKind {
-    Read,
-    Write,
+/// The file name of `name` without its archive suffix, if it has one.
+///
+/// Shared with the manifest crawler so the images it publishes and the archives
+/// this crate unpacks agree on their suffixes.
+pub fn stem(name: &str) -> Option<&str> {
+    split(name).map(|(stem, _)| stem)
 }
 
-/// Map an I/O error on `path` to the matching [`Error`], for use with `map_err`.
-fn io_error(path: &Path, kind: IoKind) -> impl FnOnce(std::io::Error) -> Error {
-    let path = path.to_path_buf();
-    move |source| match kind {
-        IoKind::Read => Error::Read { path, source },
-        IoKind::Write => Error::Write { path, source },
-    }
+/// Whether `name` names an archive this crate unpacks.
+pub fn is_archive(name: &str) -> bool {
+    split(name).is_some()
 }
 
 /// A recognized tar archive.
@@ -68,19 +67,12 @@ impl<'a> Archive<'a> {
     /// Recognize `path` as an archive this crate unpacks, or `None`.
     pub fn new(path: &'a Path) -> Option<Self> {
         let name = path.file_name()?.to_str()?;
-        let lower = name.to_ascii_lowercase();
-        let (suffix, compression) = SUFFIXES
-            .iter()
-            .find(|(suffix, _)| lower.ends_with(suffix))?;
+        let (stem, compression) = split(name)?;
 
-        // The suffix is ASCII, so removing its byte length cannot split a
-        // multi-byte character of `name`.
-        let stem = &name[..name.len() - suffix.len()];
-
-        (!stem.is_empty()).then_some(Self {
+        Some(Self {
             path,
             stem,
-            compression: *compression,
+            compression,
         })
     }
 
@@ -104,29 +96,21 @@ impl<'a> Archive<'a> {
     where
         F: FnMut(Progress),
     {
-        if let Some(parent) = destination
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            std::fs::create_dir_all(parent).map_err(io_error(parent, IoKind::Write))?;
-        }
+        fsx::create_parents(destination)?;
 
-        let temporary = temporary(destination);
-        if temporary.exists() {
-            std::fs::remove_dir_all(&temporary).map_err(io_error(&temporary, IoKind::Write))?;
-        }
-        std::fs::create_dir_all(&temporary).map_err(io_error(&temporary, IoKind::Write))?;
+        let temporary = Sibling::new(destination, Mode::Discard);
+        let staging = temporary.path();
 
-        if let Err(error) = unpack(self.path, self.compression, &temporary, progress) {
-            let _ = std::fs::remove_dir_all(&temporary);
-            return Err(error);
+        if staging.exists() {
+            std::fs::remove_dir_all(staging)
+                .map_err(|source| fsx::Error::write(staging, source))?;
         }
+        std::fs::create_dir_all(staging).map_err(|source| fsx::Error::write(staging, source))?;
 
-        if destination.exists() {
-            std::fs::remove_dir_all(destination).map_err(io_error(destination, IoKind::Write))?;
-        }
+        unpack(self.path, self.compression, staging, progress)?;
 
-        std::fs::rename(&temporary, destination).map_err(io_error(destination, IoKind::Write))
+        temporary.commit_dir(destination)?;
+        Ok(())
     }
 }
 
@@ -140,16 +124,11 @@ fn unpack<F>(
 where
     F: FnMut(Progress),
 {
-    let file = File::open(archive).map_err(io_error(archive, IoKind::Read))?;
+    let file = fsx::open(archive)?;
 
     let total = file.metadata().ok().map(|metadata| metadata.len());
-    let counted = Counting {
-        inner: file,
-        done: 0,
-        total,
-        progress,
-    };
-    let buffered = BufReader::with_capacity(BUFFER_SIZE, counted);
+    let counted = fsx::Chunked::new(file, total, progress);
+    let buffered = BufReader::with_capacity(fsx::BUFFER_SIZE, counted);
 
     let source: Box<dyn Read + '_> = match compression {
         Compression::Tar => Box::new(buffered),
@@ -160,19 +139,19 @@ where
     let mut unpacker = tar::Archive::new(source);
     let entries = unpacker
         .entries()
-        .map_err(io_error(archive, IoKind::Read))?;
+        .map_err(|source| fsx::Error::read(archive, source))?;
 
     for entry in entries {
-        let mut entry = entry.map_err(io_error(destination, IoKind::Read))?;
+        let mut entry = entry.map_err(|source| fsx::Error::read(archive, source))?;
 
         let path = entry
             .path()
-            .map_err(io_error(destination, IoKind::Read))?
+            .map_err(|source| fsx::Error::read(archive, source))?
             .into_owned();
 
         if !entry
             .unpack_in(destination)
-            .map_err(io_error(&path, IoKind::Read))?
+            .map_err(|source| fsx::Error::write(&path, source))?
         {
             return Err(Error::UnsafeMember { path });
         }
@@ -181,76 +160,10 @@ where
     Ok(())
 }
 
-/// A temporary sibling of `destination`, used until unpacking completes.
-fn temporary(destination: &Path) -> PathBuf {
-    let mut name = std::ffi::OsString::from(".");
-    name.push(
-        destination
-            .file_name()
-            .unwrap_or_else(|| std::ffi::OsStr::new("extract")),
-    );
-    name.push(".part");
-
-    destination.with_file_name(name)
-}
-
-/// A reader that reports how much of the archive has been consumed.
-struct Counting<R, F> {
-    inner: R,
-    done: u64,
-    total: Option<u64>,
-    progress: F,
-}
-
-impl<R: Read, F: FnMut(Progress)> Read for Counting<R, F> {
-    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-        let read = self.inner.read(buffer)?;
-
-        if read > 0 {
-            self.done += read as u64;
-            (self.progress)(Progress {
-                done: self.done,
-                total: self.total,
-            });
-        }
-
-        Ok(read)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A fresh, empty directory for one test.
-    fn workspace(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "deepin-ports-archive-{}-{name}",
-            std::process::id()
-        ));
-
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).unwrap();
-        path
-    }
-
-    /// Build an `image.tar.xz` holding `entries` at `root`.
-    fn archive(root: &Path, entries: &[(&str, &[u8])]) -> PathBuf {
-        let path = root.join("image.tar.xz");
-        let mut builder = tar::Builder::new(xz2::write::XzEncoder::new(Vec::new(), 6));
-
-        for (name, contents) in entries {
-            let mut header = tar::Header::new_gnu();
-            header.set_size(contents.len() as u64);
-            header.set_mode(0o644);
-            header.set_entry_type(tar::EntryType::Regular);
-            builder.append_data(&mut header, name, *contents).unwrap();
-        }
-
-        let bytes = builder.into_inner().unwrap().finish().unwrap();
-        std::fs::write(&path, bytes).unwrap();
-        path
-    }
+    use testutils::Workspace;
 
     #[test]
     fn recognizes_archives() {
@@ -292,17 +205,18 @@ mod tests {
     }
 
     #[test]
-    fn temporary_directory_is_a_sibling() {
-        assert_eq!(
-            temporary(Path::new("/cache/images/deepin-k1")),
-            PathBuf::from("/cache/images/.deepin-k1.part")
-        );
+    fn exposes_archive_suffixes() {
+        assert_eq!(stem("image.tar.xz"), Some("image"));
+        assert_eq!(stem("image.tgz"), Some("image"));
+        assert_eq!(stem("image.tar"), Some("image"));
+        assert_eq!(stem("image.iso"), None);
+        assert_eq!(stem(".tar"), None);
     }
 
     #[test]
     fn extracts_archives_and_replaces_the_destination() {
-        let root = workspace("extract");
-        let path = archive(
+        let root = Workspace::new("deepin-ports-archive", "extract");
+        let path = testutils::tar_xz(
             &root,
             &[
                 ("image.root.ext4", b"root filesystem"),
@@ -332,14 +246,12 @@ mod tests {
         std::fs::write(destination.join("stale"), b"stale").unwrap();
         archive.extract(&destination, |_| {}).unwrap();
         assert!(!destination.join("stale").exists());
-        assert!(!temporary(&destination).exists());
-
-        std::fs::remove_dir_all(&root).unwrap();
+        assert!(!root.join(".unpacked.part").exists());
     }
 
     #[test]
     fn refuses_members_outside_the_destination() {
-        let root = workspace("escape");
+        let root = Workspace::new("deepin-ports-archive", "escape");
         let path = root.join("image.tar.xz");
         let mut builder = tar::Builder::new(xz2::write::XzEncoder::new(Vec::new(), 6));
 
@@ -361,7 +273,5 @@ mod tests {
         ));
         assert!(!root.join("escape.img").exists());
         assert!(!destination.exists());
-
-        std::fs::remove_dir_all(&root).unwrap();
     }
 }

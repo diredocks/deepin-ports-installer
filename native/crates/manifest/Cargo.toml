@@ -8,11 +8,13 @@ name = "deepin-ports-manifest"
 path = "src/main.rs"
 
 [dependencies]
+archive = { path = "../archive" }
 catalog = { path = "../catalog" }
 fetch = { path = "../fetch" }
 anyhow = "1"
 astral-html = "0.0.3"
 clap = { version = "4", features = ["derive"] }
+fsx = { path = "../fsx" }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread"] }

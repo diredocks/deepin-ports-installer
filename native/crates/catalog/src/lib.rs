@@ -15,18 +15,14 @@ pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex, DeviceQuery};
 pub use images::{Candidate, Image, ImageFilter, ImageGroup, ImageIndex, ImageQuery, Query};
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Errors produced while loading the bundled TOML indexes.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Reading a file from disk failed.
-    #[error("failed to read `{path}`")]
-    Io {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    #[error(transparent)]
+    Io(#[from] fsx::Error),
 
     /// No image matched the requested device, variant or date.
     #[error("no image matches device `{device}`")]
@@ -88,8 +84,5 @@ pub(crate) fn to_json<T: serde::Serialize + ?Sized>(groups: &T) -> Result<String
 
 /// Read a TOML index document from `path`, shared by both `parse_file`s.
 pub(crate) fn read_document(path: &Path) -> Result<String> {
-    std::fs::read_to_string(path).map_err(|source| Error::Io {
-        path: path.to_path_buf(),
-        source,
-    })
+    fsx::read_to_string(path).map_err(Error::from)
 }

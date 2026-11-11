@@ -22,12 +22,8 @@ use std::path::PathBuf;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A manifest or image file could not be read.
-    #[error("failed to read `{path}`")]
-    Read {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    #[error(transparent)]
+    Io(#[from] fsx::Error),
 
     /// A file name does not name a SHA-256 checksum manifest.
     #[error("`{path}` is not a sha256 checksum manifest")]

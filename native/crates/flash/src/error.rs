@@ -7,13 +7,9 @@ pub enum Error {
     #[error(transparent)]
     Index(#[from] catalog::Error),
 
-    /// A local image file could not be read.
-    #[error("failed to read image `{path}`")]
-    LocalImage {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    /// An image, archive or directory could not be read or written.
+    #[error(transparent)]
+    Io(#[from] fsx::Error),
 
     /// A local source is not a regular file.
     #[error("`{path}` is not a regular file")]
@@ -22,14 +18,6 @@ pub enum Error {
     /// Image filters were given together with a local file source.
     #[error("architecture, variant and date filters only apply when the source is a device model")]
     FiltersWithLocalSource,
-
-    /// An archive, manifest or image file could not be read.
-    #[error("failed to read `{path}`")]
-    Read {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
 
     /// An archive could not be unpacked.
     #[error(transparent)]

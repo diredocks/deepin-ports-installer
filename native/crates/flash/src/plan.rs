@@ -89,10 +89,7 @@ fn local(path: PathBuf, options: &SourceOptions<'_>) -> Result<Source> {
         return Err(Error::FiltersWithLocalSource);
     }
 
-    let metadata = std::fs::metadata(&path).map_err(|source| Error::LocalImage {
-        path: path.clone(),
-        source,
-    })?;
+    let metadata = fsx::metadata(&path)?;
 
     if !metadata.is_file() {
         return Err(Error::NotAFile { path });
@@ -123,30 +120,29 @@ fn remote(device: &str, options: &SourceOptions<'_>) -> Result<Source> {
 mod tests {
     use super::*;
     use catalog::Candidate;
+    use testutils::Workspace;
 
     fn options<'a>() -> SourceOptions<'a> {
         SourceOptions::default()
     }
 
-    fn temp_file(name: &str) -> PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("deepin-ports-flash-{}-{name}", std::process::id()));
-        std::fs::write(&path, b"image").unwrap();
-        path
-    }
-
     #[test]
     fn resolves_local_files() {
-        let path = temp_file("local.img");
+        let root = Workspace::new("deepin-ports-flash", "local");
+        let path = root.join("local.img");
+        std::fs::write(&path, b"image").unwrap();
+
         let source = resolve(path.to_str().unwrap(), &options()).unwrap();
-        std::fs::remove_file(&path).unwrap();
 
         assert_eq!(source, Source::Local { path, size: 5 });
     }
 
     #[test]
     fn rejects_filters_for_local_files() {
-        let path = temp_file("filtered.img");
+        let root = Workspace::new("deepin-ports-flash", "filtered");
+        let path = root.join("filtered.img");
+        std::fs::write(&path, b"image").unwrap();
+
         let options = SourceOptions {
             arch: Some(Arch::Riscv),
             ..SourceOptions::default()
@@ -156,22 +152,21 @@ mod tests {
             resolve(path.to_str().unwrap(), &options),
             Err(Error::FiltersWithLocalSource)
         ));
-
-        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
     fn rejects_directories_and_missing_files() {
-        let dir = std::env::temp_dir();
+        let root = Workspace::new("deepin-ports-flash", "not-a-file");
+
         assert!(matches!(
-            resolve(dir.to_str().unwrap(), &options()),
+            resolve(root.to_str().unwrap(), &options()),
             Err(Error::NotAFile { .. })
         ));
 
-        let missing = std::env::temp_dir().join("deepin-ports-flash-missing/deepin.img");
+        let missing = root.join("missing/deepin.img");
         assert!(matches!(
             resolve(missing.to_str().unwrap(), &options()),
-            Err(Error::LocalImage { .. })
+            Err(Error::Io(_))
         ));
     }
 
