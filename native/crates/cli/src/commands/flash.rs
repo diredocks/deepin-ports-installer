@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use ::flash::{Plan, PrepareOptions, Prepared, Source, SourceOptions};
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use archive::Archive;
 use catalog::date;
 use clap::Args;
@@ -61,13 +61,12 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
         return Ok(());
     }
 
-    if !downloaded.is_file() {
-        bail!(
-            "{} has not been downloaded yet; run `deepin-ports-installer-cli download {}` first",
-            downloaded.display(),
-            args.source
-        );
-    }
+    ensure!(
+        downloaded.is_file(),
+        "{} has not been downloaded yet; run `deepin-ports-installer-cli download {}` first",
+        downloaded.display(),
+        args.source
+    );
 
     let options = PrepareOptions {
         force: args.force,
@@ -93,7 +92,7 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
-    bail!(
+    todo!(
         "writing images to block devices is not implemented yet; the artifacts are prepared in {}",
         prepared.directory.display()
     )
