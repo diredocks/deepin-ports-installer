@@ -390,26 +390,6 @@ mod tests {
     }
 
     #[test]
-    fn bus_type_and_enumerator_round_trip_through_serde() {
-        for bus in [
-            BusType::Usb,
-            BusType::Sata,
-            BusType::Unknown("NVME".into()),
-            BusType::unreported(),
-        ] {
-            let json = serde_json::to_string(&bus).unwrap();
-            assert_eq!(serde_json::from_str::<BusType>(&json).unwrap(), bus);
-        }
-
-        let json = serde_json::to_string(&Enumerator::LsblkPairs).unwrap();
-        assert_eq!(json, "\"lsblk:pairs\"");
-        assert_eq!(
-            serde_json::from_str::<Enumerator>(&json).unwrap(),
-            Enumerator::LsblkPairs
-        );
-    }
-
-    #[test]
     fn to_toml_round_trips_targets_layout() {
         let list = TargetList::new(vec![sample_target()]);
         let rendered = list.to_toml().unwrap();

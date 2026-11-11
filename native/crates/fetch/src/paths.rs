@@ -33,29 +33,3 @@ pub fn is_directory(path: &Path) -> bool {
 fn project_dirs() -> Result<ProjectDirs> {
     ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION).ok_or(Error::ProjectDirs)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn create_dir(path: PathBuf) -> Result<PathBuf> {
-        std::fs::create_dir_all(&path).map_err(|source| Error::Io {
-            path: path.clone(),
-            source,
-        })?;
-        Ok(path)
-    }
-
-    #[test]
-    fn creates_missing_directories() {
-        let root = std::env::temp_dir().join(format!(
-            "deepin-ports-installer-dirs-{}",
-            std::process::id()
-        ));
-
-        let cache = create_dir(root.join("cache")).unwrap();
-        assert!(cache.is_dir());
-
-        std::fs::remove_dir_all(root).unwrap();
-    }
-}

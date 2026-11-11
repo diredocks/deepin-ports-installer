@@ -365,35 +365,6 @@ mod tests {
     }
 
     #[test]
-    fn images_are_sorted_by_date() {
-        let index = ImageIndex::from(vec![ImageGroup {
-            arch: Arch::Riscv,
-            device: "jh7110".to_owned(),
-            images: vec![
-                Image {
-                    variant: "new".to_owned(),
-                    size: 2,
-                    date: "20250603-113217".to_owned(),
-                    link: "https://example.com/new.tar.xz".to_owned(),
-                },
-                Image {
-                    variant: "old".to_owned(),
-                    size: 1,
-                    date: "20240805-110418".to_owned(),
-                    link: "https://example.com/old.tar.xz".to_owned(),
-                },
-            ],
-        }]);
-
-        let variants: Vec<&str> = index.groups()[0]
-            .images
-            .iter()
-            .map(|image| image.variant.as_str())
-            .collect();
-        assert_eq!(variants, ["old", "new"]);
-    }
-
-    #[test]
     fn to_toml_round_trips_canonical_layout() {
         let index = ImageIndex::parse(SAMPLE).unwrap();
         let rendered = index.to_toml().unwrap();

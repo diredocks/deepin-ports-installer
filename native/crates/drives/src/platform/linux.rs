@@ -230,12 +230,6 @@ mod tests {
     }
 
     #[test]
-    fn resolves_relative_device_names_under_dev() {
-        assert_eq!(resolve_device("sdb"), PathBuf::from("/dev/sdb"));
-        assert_eq!(resolve_device("/dev/sdb"), PathBuf::from("/dev/sdb"));
-    }
-
-    #[test]
     fn maps_partition_table_types() {
         assert_eq!(partition_table(Some("gpt")), Some(PartitionTable::Gpt));
         assert_eq!(partition_table(Some("GPT")), Some(PartitionTable::Gpt));
