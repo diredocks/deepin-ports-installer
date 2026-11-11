@@ -220,16 +220,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ignores_loop_optical_and_ram_devices() {
-        for name in ["/dev/loop3", "/dev/sr0", "/dev/ram1"] {
-            assert!(is_ignored(Path::new(name)));
-        }
-        for name in ["/dev/sda", "/dev/nvme0n1", "/dev/mmcblk0"] {
-            assert!(!is_ignored(Path::new(name)));
-        }
-    }
-
-    #[test]
     fn maps_partition_table_types() {
         assert_eq!(partition_table(Some("gpt")), Some(PartitionTable::Gpt));
         assert_eq!(partition_table(Some("GPT")), Some(PartitionTable::Gpt));

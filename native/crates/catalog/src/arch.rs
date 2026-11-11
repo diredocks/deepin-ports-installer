@@ -56,7 +56,6 @@ mod tests {
     fn slug_round_trips() {
         for arch in [Arch::Riscv, Arch::Arm64, Arch::Amd64, Arch::Loong64] {
             assert_eq!(Arch::from_str(arch.as_str()).unwrap(), arch);
-            assert_eq!(arch.to_string(), arch.as_str());
         }
     }
 

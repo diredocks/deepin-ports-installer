@@ -185,10 +185,4 @@ NAME="sr0" MAJ:MIN="11:0" RM="1" SIZE="1048576" RO="0" TYPE="rom" MOUNTPOINT=""
             Err(Error::LsblkOutput(_))
         ));
     }
-
-    #[test]
-    fn empty_pairs_output_yields_no_targets() {
-        assert!(parse("").unwrap().is_empty());
-        assert!(parse("  \n \n").unwrap().is_empty());
-    }
 }

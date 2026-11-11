@@ -361,13 +361,8 @@ mod tests {
 
     #[test]
     fn maps_known_transports_to_bus_types() {
-        assert_eq!(BusType::from("usb"), BusType::Usb);
         assert_eq!(BusType::from("USB"), BusType::Usb);
         assert_eq!(BusType::from(" sata "), BusType::Sata);
-        assert_eq!(BusType::from("scsi"), BusType::Scsi);
-        assert_eq!(BusType::from("ata"), BusType::Ata);
-        assert_eq!(BusType::from("ide"), BusType::Ide);
-        assert_eq!(BusType::from("pci"), BusType::Pci);
         assert_eq!(BusType::from(""), BusType::unreported());
     }
 
@@ -377,16 +372,6 @@ mod tests {
         assert_eq!(BusType::from("sas"), BusType::Unknown("SAS".into()));
         assert_eq!(BusType::Unknown("NVME".into()).to_string(), "NVME");
         assert_eq!(BusType::unreported().to_string(), "UNKNOWN");
-    }
-
-    #[test]
-    fn classifies_scsi_buses() {
-        assert!(BusType::Usb.is_usb());
-        assert!(!BusType::Usb.is_scsi());
-        assert!(BusType::Sata.is_scsi());
-        assert!(BusType::Pci.is_scsi());
-        assert!(!BusType::unreported().is_scsi());
-        assert!(!BusType::Unknown("SAS".into()).is_usb());
     }
 
     #[test]

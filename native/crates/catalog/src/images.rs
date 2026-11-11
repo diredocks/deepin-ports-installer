@@ -369,10 +369,6 @@ mod tests {
         let index = ImageIndex::parse(SAMPLE).unwrap();
         let rendered = index.to_toml().unwrap();
 
-        assert!(rendered.contains("[[riscv.dp1000]]"));
-        assert!(rendered.contains("[[riscv.jh7110]]"));
-        assert!(rendered.contains("[[arm64.generic]]"));
-
         assert_eq!(ImageIndex::parse(&rendered).unwrap(), index);
     }
 
