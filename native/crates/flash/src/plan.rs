@@ -4,7 +4,7 @@
 //! bundled index maps to an image. Both are resolved into a [`Plan`] that a
 //! frontend can show and later execute.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use catalog::{Arch, DeviceIndex, Image, ImageIndex, Query};
 
@@ -69,19 +69,26 @@ pub fn plan(source: &str, target: impl Into<PathBuf>, options: &SourceOptions<'_
 
 /// Resolve what `source` names, without looking at the target.
 pub fn resolve(source: &str, options: &SourceOptions<'_>) -> Result<Source> {
-    if looks_like_file(source) {
-        if !options.is_empty() {
-            return Err(Error::FiltersWithLocalSource);
-        }
-
-        return local(PathBuf::from(source));
+    match local_path(source) {
+        Some(path) => local(path, options),
+        None => remote(source, options),
     }
+}
 
-    remote(source, options)
+/// The file `source` names, when it names an image rather than a device model.
+fn local_path(source: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(source);
+    let is_file = source.chars().any(std::path::is_separator) || path.is_file();
+
+    is_file.then_some(path)
 }
 
 /// Read the metadata of a local image file.
-fn local(path: PathBuf) -> Result<Source> {
+fn local(path: PathBuf, options: &SourceOptions<'_>) -> Result<Source> {
+    if !options.is_empty() {
+        return Err(Error::FiltersWithLocalSource);
+    }
+
     let metadata = std::fs::metadata(&path).map_err(|source| Error::LocalImage {
         path: path.clone(),
         source,
@@ -110,11 +117,6 @@ fn remote(device: &str, options: &SourceOptions<'_>) -> Result<Source> {
     };
 
     Ok(Source::Remote(images.resolve(&devices, &query)?))
-}
-
-/// Whether `source` names a local image rather than a device model.
-fn looks_like_file(source: &str) -> bool {
-    source.chars().any(std::path::is_separator) || Path::new(source).is_file()
 }
 
 #[cfg(test)]
