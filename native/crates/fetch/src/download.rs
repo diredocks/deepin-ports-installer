@@ -93,17 +93,7 @@ where
         total,
     });
 
-    let written = match write_body(
-        &mut file,
-        response,
-        &temp,
-        url,
-        offset,
-        total,
-        &mut progress,
-    )
-    .await
-    {
+    let written = match write_body(&mut file, response, &temp, url, offset, total, progress).await {
         Ok(written) => written,
         Err(error) => {
             let _ = std::io::Write::flush(&mut file);
@@ -248,7 +238,7 @@ async fn write_body<F>(
     url: &str,
     mut downloaded: u64,
     total: Option<u64>,
-    progress: &mut F,
+    mut progress: F,
 ) -> Result<u64>
 where
     F: FnMut(Progress),

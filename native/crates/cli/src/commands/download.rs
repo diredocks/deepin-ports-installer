@@ -86,7 +86,6 @@ pub fn run(args: DownloadArgs, quiet: bool) -> Result<()> {
         .context("failed to download image")?;
 
     bar.finish_and_clear();
-
     log::info!("wrote {}", dest.display());
 
     Ok(())
