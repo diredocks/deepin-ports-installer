@@ -22,6 +22,6 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Images(args) => images::run(args),
         Command::Targets(args) => targets::run(args),
         Command::Download(args) => download::run(args, quiet),
-        Command::Flash(args) => flash::run(args),
+        Command::Flash(args) => flash::run(args, quiet),
     }
 }

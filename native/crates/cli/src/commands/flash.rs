@@ -1,17 +1,19 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use ::flash::{Plan, Source, SourceOptions};
+use ::flash::{Plan, PrepareOptions, Prepared, Source, SourceOptions};
 use anyhow::{Context, Result, bail};
+use archive::Archive;
 use catalog::date;
 use clap::Args;
 use fetch::download;
 use humansize::{BINARY, format_size};
 
 use crate::cli::ImageFilterArgs;
+use crate::render;
 
 #[derive(Debug, Args)]
 pub struct FlashArgs {
-    /// Device model (e.g. visionfive-2) or a local image file
+    /// Device model (e.g. visionfive-2) or a local image or archive
     ///
     /// A value containing a path separator, or naming an existing file, is
     /// treated as a local image; anything else is resolved as a device model.
@@ -25,18 +27,20 @@ pub struct FlashArgs {
     #[command(flatten)]
     pub filters: ImageFilterArgs,
 
-    /// Print the resolved source and target without writing anything
+    /// Unpack the archive again even when an extraction is cached
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Accept an image that no checksum manifest covers (e.g. an ISO)
+    #[arg(long)]
+    pub allow_unverified: bool,
+
+    /// Print the resolved source, target and extraction directory without preparing anything
     #[arg(short = 'n', long)]
     pub dry_run: bool,
 }
 
-pub fn run(args: FlashArgs) -> Result<()> {
-    if !args.dry_run {
-        bail!(
-            "writing images to block devices is not implemented yet; re-run with `--dry-run` to inspect the plan"
-        );
-    }
-
+pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     let plan = ::flash::plan(
         &args.source,
         &args.target,
@@ -50,7 +54,58 @@ pub fn run(args: FlashArgs) -> Result<()> {
 
     print_plan(&plan);
 
-    Ok(())
+    let downloaded = archive_path(&plan)?;
+
+    if args.dry_run {
+        print_preparation(&downloaded);
+        return Ok(());
+    }
+
+    if !downloaded.is_file() {
+        bail!(
+            "{} has not been downloaded yet; run `deepin-ports-installer-cli download {}` first",
+            downloaded.display(),
+            args.source
+        );
+    }
+
+    let options = PrepareOptions {
+        force: args.force,
+        allow_unverified: args.allow_unverified,
+    };
+
+    log::info!("preparing {}", downloaded.display());
+
+    let bar = render::prepare_bar(quiet);
+    let result = ::flash::prepare(&downloaded, &options, |progress| {
+        render::prepare_progress(&bar, &progress);
+    });
+    bar.finish_and_clear();
+
+    let prepared = match result {
+        Ok(prepared) => prepared,
+        Err(::flash::Error::Unverified { path }) => bail!(
+            "`{}` is not covered by any checksum manifest; pass `--allow-unverified` to accept it",
+            path.display()
+        ),
+        Err(error) => return Err(error).context("failed to prepare the image"),
+    };
+
+    print_prepared(&prepared);
+
+    bail!(
+        "writing images to block devices is not implemented yet; the artifacts are prepared in {}",
+        prepared.directory.display()
+    )
+}
+
+/// Where the archive the plan names is, or will be, cached.
+fn archive_path(plan: &Plan) -> Result<PathBuf> {
+    match &plan.source {
+        Source::Remote(image) => download::destination(None, &image.link)
+            .context("failed to resolve the download destination"),
+        Source::Local { path, .. } => Ok(path.clone()),
+    }
 }
 
 fn print_plan(plan: &Plan) {
@@ -77,4 +132,27 @@ fn print_plan(plan: &Plan) {
     }
 
     println!("target: {}", plan.target.display());
+}
+
+fn print_preparation(downloaded: &Path) {
+    match Archive::new(downloaded) {
+        Some(archive) => println!("extract: {}", archive.extraction_dir().display()),
+        None => println!("extract: none (the image is not an archive)"),
+    }
+}
+
+fn print_prepared(prepared: &Prepared) {
+    for artifact in &prepared.artifacts {
+        let checksum = match &artifact.digest {
+            Some(digest) => format!("verified {}", digest.algorithm),
+            None => "unverified".to_owned(),
+        };
+
+        println!(
+            "artifact: {} ({}, {}, {checksum})",
+            artifact.path.display(),
+            artifact.role,
+            format_size(artifact.size, BINARY.decimal_places(1))
+        );
+    }
 }

@@ -8,6 +8,7 @@ name = "deepin-ports-installer-cli"
 path = "src/main.rs"
 
 [dependencies]
+archive = { path = "../archive" }
 catalog = { path = "../catalog", features = ["cli"] }
 fetch = { path = "../fetch" }
 anyhow = "1"

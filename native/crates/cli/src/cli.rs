@@ -7,9 +7,10 @@ use crate::render::OutputFormat;
 
 /// Install Deepin Ports images on SD cards, USB drives and eMMC.
 ///
-/// `flash` resolves the newest matching image, downloads it when needed and
-/// writes it to the given block device. Use `devices`, `images` and `targets`
-/// to discover what can be installed where.
+/// `download` fetches an image; `flash` resolves the newest matching image,
+/// unpacks and verifies the downloaded copy, then writes it to the given block
+/// device. Use `devices`, `images` and `targets` to discover what can be
+/// installed where.
 #[derive(Debug, Parser)]
 #[command(
     name = "deepin-ports-installer-cli",
@@ -58,7 +59,9 @@ pub enum Command {
     /// Download an image to a local file
     Download(DownloadArgs),
 
-    /// Write an image to a block device
+    /// Unpack and verify an image, then write it to a block device
+    ///
+    /// The image must be downloaded first; writing is not implemented yet.
     Flash(FlashArgs),
 }
 

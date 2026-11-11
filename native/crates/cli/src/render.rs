@@ -164,8 +164,19 @@ fn print_plain_table(headers: &[&str], rows: &[Vec<String>]) {
     }
 }
 
+/// A progress bar for unpacking and verifying an image on stderr.
+pub fn prepare_bar(quiet: bool) -> ProgressBar {
+    progress_bar(0, quiet)
+}
+
 /// A progress bar tracking a download of `total` bytes on stderr.
 pub fn download_bar(total: u64, quiet: bool) -> ProgressBar {
+    let bar = progress_bar(total, quiet);
+    bar.set_message("downloading");
+    bar
+}
+
+fn progress_bar(total: u64, quiet: bool) -> ProgressBar {
     if quiet {
         return ProgressBar::hidden();
     }
@@ -173,11 +184,21 @@ pub fn download_bar(total: u64, quiet: bool) -> ProgressBar {
     let bar = ProgressBar::new(total);
     bar.set_style(
         ProgressStyle::with_template(
-            "{msg} [{bar:40}] {bytes}/{total_bytes} ({percent}%) {bytes_per_sec} ETA {eta}",
+            "{msg:>10} [{bar:40}] {bytes}/{total_bytes} ({percent}%) {bytes_per_sec} ETA {eta}",
         )
         .expect("progress template is valid")
         .progress_chars("#>-"),
     );
-    bar.set_message("downloading");
     bar
+}
+
+/// Show a preparation progress report on `bar`.
+pub fn prepare_progress(bar: &ProgressBar, progress: &flash::Progress) {
+    bar.set_message(progress.phase.as_str());
+
+    if let Some(total) = progress.total {
+        bar.set_length(total);
+    }
+
+    bar.set_position(progress.done);
 }
