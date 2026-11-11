@@ -1,8 +1,53 @@
-//! Parsing checksum manifests and finding them on disk.
+//! Parsing sha256sum manifests and finding them on disk.
 
 use std::path::{Path, PathBuf};
 
-use crate::{Algorithm, Error, Result};
+use crate::{Error, Result};
+
+/// Length of a hex SHA-256 digest.
+const DIGEST_LEN: usize = 64;
+
+/// Suffixes that mark a file as a manifest naming the file before them.
+const SUFFIXES: [&str; 2] = [".sha256sum", ".sha256"];
+
+/// The tool whose per-architecture mirror listings (`sha256sum_riscv64.txt`)
+/// this crate reads.
+const TOOL: &str = "sha256sum";
+
+/// The stem a manifest file name is about, e.g. `image.tar.xz` for
+/// `image.tar.xz.sha256sum`.
+///
+/// The mirror's per-architecture form (`sha256sum_riscv64.txt`) names no single
+/// file rather than an empty one, so it yields `None`.
+fn subject_of(file_name: &str) -> Option<&str> {
+    let lower = file_name.to_ascii_lowercase();
+
+    // The suffixes are ASCII, so removing their byte length cannot split a
+    // multi-byte character of `file_name`.
+    SUFFIXES
+        .iter()
+        .find_map(|suffix| {
+            lower
+                .ends_with(suffix)
+                .then(|| &file_name[..file_name.len() - suffix.len()])
+        })
+        .filter(|stem| !stem.is_empty())
+}
+
+/// Whether `file_name` names a sha256 manifest.
+fn is_manifest(file_name: &str) -> bool {
+    subject_of(file_name).is_some() || tool_listing(file_name)
+}
+
+/// Whether `file_name` is the mirror's per-architecture listing, e.g.
+/// `sha256sum_riscv64.txt` or `sha256sum.txt`.
+fn tool_listing(file_name: &str) -> bool {
+    let lower = file_name.to_ascii_lowercase();
+
+    lower
+        .strip_prefix(TOOL)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(['_', '.', '-']))
+}
 
 /// One `<checksum>  <file>` line of a manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,7 +61,7 @@ struct Entry {
 
 impl Entry {
     /// Parse one manifest line; `None` for blanks, comments and non-checksums.
-    fn parse(line: &str, algorithm: Algorithm) -> Option<Self> {
+    fn parse(line: &str) -> Option<Self> {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             return None;
@@ -28,8 +73,8 @@ impl Entry {
         };
 
         let digest = digest.to_ascii_lowercase();
-        let valid = digest.len() == algorithm.hex_len()
-            && digest.bytes().all(|byte| byte.is_ascii_hexdigit());
+        let valid =
+            digest.len() == DIGEST_LEN && digest.bytes().all(|byte| byte.is_ascii_hexdigit());
 
         valid.then(|| Entry {
             digest,
@@ -46,11 +91,13 @@ impl Entry {
             return subject == Some(name);
         }
 
-        Path::new(&self.file)
-            .file_name()
-            .and_then(|listed| listed.to_str())
-            == Some(name)
+        file_name(&self.file) == Some(name)
     }
+}
+
+/// The file name a manifest entry lists, ignoring any directory part.
+fn file_name(listed: &str) -> Option<&str> {
+    Path::new(listed).file_name().and_then(|name| name.to_str())
 }
 
 /// A parsed checksum manifest.
@@ -59,30 +106,30 @@ pub struct Manifest {
     /// File the manifest was read from.
     path: PathBuf,
 
-    /// Hash function its checksums use.
-    algorithm: Algorithm,
-
     /// Checksums it lists.
     entries: Vec<Entry>,
 }
 
 impl Manifest {
-    /// Read the manifest at `path`, detecting its algorithm from the file name.
+    /// Read the manifest at `path`, if its name marks it as one.
     pub fn read(path: &Path) -> Result<Self> {
-        let algorithm = path
+        let is_manifest = path
             .file_name()
             .and_then(|name| name.to_str())
-            .and_then(Algorithm::from_file_name)
-            .ok_or_else(|| Error::UnknownManifest {
+            .is_some_and(is_manifest);
+
+        if !is_manifest {
+            return Err(Error::NotAManifest {
                 path: path.to_path_buf(),
-            })?;
+            });
+        }
 
         let text = std::fs::read_to_string(path).map_err(|source| Error::Read {
             path: path.to_path_buf(),
             source,
         })?;
 
-        Ok(Self::parse(path.to_path_buf(), algorithm, &text))
+        Ok(Self::parse(path.to_path_buf(), &text))
     }
 
     /// Load the manifests among `paths`, ignoring files that are not manifests.
@@ -98,7 +145,7 @@ impl Manifest {
             let is_manifest = path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| Algorithm::from_file_name(name).is_some());
+                .is_some_and(is_manifest);
 
             if is_manifest {
                 manifests.push(Self::read(&path)?);
@@ -138,22 +185,10 @@ impl Manifest {
         Self::load(paths)
     }
 
-    pub(crate) fn parse(path: PathBuf, algorithm: Algorithm, text: &str) -> Self {
-        let entries = text
-            .lines()
-            .filter_map(|line| Entry::parse(line, algorithm))
-            .collect();
+    pub(crate) fn parse(path: PathBuf, text: &str) -> Self {
+        let entries = text.lines().filter_map(Entry::parse).collect();
 
-        Self {
-            path,
-            algorithm,
-            entries,
-        }
-    }
-
-    /// The hash function this manifest's checksums use.
-    pub fn algorithm(&self) -> Algorithm {
-        self.algorithm
+        Self { path, entries }
     }
 
     /// The checksum this manifest records for `file`, if it records one.
@@ -163,16 +198,31 @@ impl Manifest {
 
         self.entries
             .iter()
-            .find(|entry| entry.covers(name, subject.as_deref()))
+            .find(|entry| entry.covers(name, subject))
             .map(|entry| entry.digest.as_str())
     }
 
+    /// The file names this manifest covers, as they appear in the manifest.
+    ///
+    /// A lone digest covers the file the manifest is named after, e.g.
+    /// `image.img` for `image.img.sha256`; other entries cover the file they
+    /// list. Entries without a readable file name are skipped.
+    pub fn files(&self) -> impl Iterator<Item = &str> + '_ {
+        self.entries.iter().filter_map(move |entry| {
+            if entry.file.is_empty() || entry.file == "-" {
+                self.subject()
+            } else {
+                file_name(&entry.file)
+            }
+        })
+    }
+
     /// The file a manifest is named after, e.g. `image.tar.xz` for
-    /// `image.tar.xz.b2sum`.
-    fn subject(&self) -> Option<String> {
+    /// `image.tar.xz.sha256sum`.
+    fn subject(&self) -> Option<&str> {
         let name = self.path.file_name().and_then(|name| name.to_str())?;
-        let (stem, _) = Algorithm::detect(name)?;
-        (!stem.is_empty()).then(|| stem.to_owned())
+
+        subject_of(name)
     }
 }
 
@@ -180,22 +230,48 @@ impl Manifest {
 mod tests {
     use super::*;
 
-    /// A syntactically valid digest of `algorithm`, for parser tests.
-    fn fake(algorithm: Algorithm) -> String {
-        "ab".repeat(algorithm.hex_len() / 2)
+    /// A syntactically valid digest, for parser tests.
+    fn fake() -> String {
+        "ab".repeat(DIGEST_LEN / 2)
     }
 
-    fn parse(algorithm: Algorithm, text: &str) -> Manifest {
-        Manifest::parse(
-            PathBuf::from(format!("image.{}", algorithm.as_str())),
-            algorithm,
-            text,
-        )
+    fn parse(text: &str) -> Manifest {
+        Manifest::parse(PathBuf::from("image.sha256sum"), text)
+    }
+
+    #[test]
+    fn detects_manifest_names() {
+        for name in [
+            "image.sha256sum",
+            "image.tar.xz.sha256sum",
+            "image.SHA256",
+            "image.root.ext4.sha256",
+            "sha256sum_riscv64.txt",
+            "SHA256SUM_arm64.txt",
+            "sha256sum",
+        ] {
+            assert!(is_manifest(name), "{name}");
+        }
+
+        for name in ["image.img", "image.tar.xz", "README.md", "sha256sums.txt"] {
+            assert!(!is_manifest(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn strips_the_matching_suffix() {
+        assert_eq!(subject_of("image.tar.xz.sha256sum"), Some("image.tar.xz"));
+        assert_eq!(
+            subject_of("image.root.ext4.SHA256"),
+            Some("image.root.ext4")
+        );
+        assert_eq!(subject_of("sha256sum_riscv64.txt"), None);
+        assert_eq!(subject_of(".sha256"), None);
     }
 
     #[test]
     fn parses_coreutils_lines() {
-        let sha = fake(Algorithm::Sha256);
+        let sha = fake();
         let text = format!(
             "# generated by sha256sum\n\
              \n\
@@ -205,7 +281,7 @@ mod tests {
              nonsense\n"
         );
 
-        let manifest = parse(Algorithm::Sha256, &text);
+        let manifest = parse(&text);
         let files: Vec<&str> = manifest
             .entries
             .iter()
@@ -218,17 +294,16 @@ mod tests {
 
     #[test]
     fn drops_lines_with_the_wrong_digest_length() {
-        let manifest = parse(Algorithm::Sha256, "abcd  image.img\n");
+        let manifest = parse("abcd  image.img\n");
         assert!(manifest.entries.is_empty());
     }
 
     #[test]
     fn matches_entries_by_file_name() {
-        let sha = fake(Algorithm::Sha256);
-        let manifest = parse(
-            Algorithm::Sha256,
-            &format!("{sha}  ./deepin-k1-riscv64-25-desktop-installer.root.ext4\n"),
-        );
+        let sha = fake();
+        let manifest = parse(&format!(
+            "{sha}  ./deepin-k1-riscv64-25-desktop-installer.root.ext4\n"
+        ));
 
         assert_eq!(
             manifest.digest(Path::new(
@@ -241,20 +316,40 @@ mod tests {
 
     #[test]
     fn lone_digests_cover_the_manifest_subject() {
-        let sum = fake(Algorithm::Blake2b);
+        let sha = fake();
         let manifest = Manifest::parse(
-            PathBuf::from("deepin-25-crimson-preview-arm64-phytiumpi.tar.xz.b2sum"),
-            Algorithm::Blake2b,
-            &sum,
+            PathBuf::from("deepin-25-crimson-preview-arm64-phytiumpi.tar.xz.sha256"),
+            &sha,
         );
 
         assert_eq!(
             manifest.digest(Path::new(
                 "deepin-25-crimson-preview-arm64-phytiumpi.tar.xz"
             )),
-            Some(sum.as_str())
+            Some(sha.as_str())
         );
         assert_eq!(manifest.digest(Path::new("something-else.img")), None);
+    }
+
+    #[test]
+    fn lists_the_files_it_covers() {
+        let sha = fake();
+        let manifest = parse(&format!(
+            "{sha}  image.root.ext4\n\
+             {sha}  ./image.boot.ext4\n\
+             {sha}  -\n\
+             {sha}\n"
+        ));
+
+        let files: Vec<&str> = manifest.files().collect();
+        assert_eq!(
+            files,
+            ["image.root.ext4", "image.boot.ext4", "image", "image"]
+        );
+
+        let lone = Manifest::parse(PathBuf::from("image.root.ext4.sha256"), &sha);
+        let files: Vec<&str> = lone.files().collect();
+        assert_eq!(files, ["image.root.ext4"]);
     }
 
     #[test]
@@ -264,7 +359,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
-        let sum = fake(Algorithm::Sha256);
+        let sum = fake();
         std::fs::write(root.join("image.img"), b"payload").unwrap();
         std::fs::write(root.join("image.sha256sum"), format!("{sum}  image.img\n")).unwrap();
 
@@ -272,7 +367,10 @@ mod tests {
         let manifests = Manifest::load(paths).unwrap();
 
         assert_eq!(manifests.len(), 1);
-        assert_eq!(manifests[0].algorithm(), Algorithm::Sha256);
+        assert_eq!(
+            manifests[0].digest(Path::new("image.img")),
+            Some(sum.as_str())
+        );
 
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -284,37 +382,32 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
-        let sum = fake(Algorithm::Blake2b);
+        let sum = fake();
         std::fs::write(root.join("image.tar.xz"), b"payload").unwrap();
         std::fs::write(
-            root.join("image.tar.xz.b2sum"),
+            root.join("image.tar.xz.sha256sum"),
             format!("{sum}  image.tar.xz\n"),
         )
         .unwrap();
         std::fs::write(
             root.join("sha256sum_riscv64.txt"),
-            format!("{}  image.tar.xz\n", fake(Algorithm::Sha256)),
+            format!("{sum}  image.tar.xz\n"),
         )
         .unwrap();
         std::fs::write(root.join("README.md"), b"not a manifest").unwrap();
         std::fs::create_dir_all(root.join("subdir")).unwrap();
 
         let manifests = Manifest::in_directory(&root).unwrap();
-        let algorithms: Vec<Algorithm> = manifests
-            .iter()
-            .map(|manifest| manifest.algorithm())
-            .collect();
-
-        assert_eq!(algorithms, [Algorithm::Blake2b, Algorithm::Sha256]);
+        assert_eq!(manifests.len(), 2);
 
         std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
-    fn rejects_names_without_an_algorithm() {
+    fn rejects_names_that_are_not_manifests() {
         assert!(matches!(
             Manifest::read(Path::new("/tmp/image.img")),
-            Err(Error::UnknownManifest { .. })
+            Err(Error::NotAManifest { .. })
         ));
     }
 }

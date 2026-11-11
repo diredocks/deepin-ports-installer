@@ -1,14 +1,16 @@
 //! Image artifacts found in an archive or on disk.
 //!
-//! The role of a file is read from its name, following the build naming
-//! convention (`<stem>.boot.ext4`, `<stem>.efi.fat32`, `<stem>.root.ext4`).
+//! An artifact is what gets written to the target device, which is why the
+//! role of a file is read from its name, following the build naming convention
+//! (`<stem>.boot.ext4`, `<stem>.efi.fat32`, `<stem>.root.ext4`): a checksum
+//! manifest says nothing about which file is a boot partition or in which order
+//! partitions are written.
 
 use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::{Error, Result};
-use checksum::Digest;
 
 /// Role an artifact plays when flashing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,7 +36,7 @@ impl Role {
     ///
     /// A bare `*.ext4` counts as a root partition: builds that drop the `root`
     /// marker are still root images.
-    fn from_file_name(file_name: &str) -> Option<Self> {
+    pub(crate) fn from_file_name(file_name: &str) -> Option<Self> {
         let name = file_name.to_ascii_lowercase();
         let (stem, extension) = name.rsplit_once('.')?;
 
@@ -81,9 +83,6 @@ pub struct Artifact {
 
     /// Size in bytes.
     pub size: u64,
-
-    /// Checksum the file was verified against; `None` when it is unverified.
-    pub digest: Option<Digest>,
 }
 
 impl Artifact {
@@ -111,7 +110,6 @@ impl Artifact {
             path: path.to_path_buf(),
             role,
             size: metadata.len(),
-            digest: None,
         }))
     }
 
@@ -181,7 +179,6 @@ mod tests {
             path: PathBuf::from(path),
             role,
             size: 1,
-            digest: None,
         }
     }
 }

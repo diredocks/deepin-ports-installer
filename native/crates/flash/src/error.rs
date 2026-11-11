@@ -39,6 +39,13 @@ pub enum Error {
     #[error("`{path}` contains no image artifact")]
     NoArtifacts { path: PathBuf },
 
+    /// A file a checksum manifest lists is missing from the extraction.
+    #[error("`{name}` is listed in a checksum manifest but missing")]
+    Missing {
+        /// File name as recorded in the manifest.
+        name: String,
+    },
+
     /// No checksum manifest covers an artifact.
     #[error("`{path}` is not covered by any checksum manifest")]
     Unverified { path: PathBuf },

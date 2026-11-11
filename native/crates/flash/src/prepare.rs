@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use checksum::Manifest;
 
-use crate::artifact::Artifact;
+use crate::artifact::{Artifact, Role};
 use crate::progress::{Phase, Progress};
 use crate::{Error, Result};
 
@@ -26,25 +26,31 @@ pub struct Prepared {
 
     /// Artifacts found there, in flash order.
     pub artifacts: Vec<Artifact>,
+
+    /// Artifacts no checksum manifest covered, in flash order.
+    ///
+    /// Only possible when [`PrepareOptions::allow_unverified`] is set.
+    pub unverified: Vec<PathBuf>,
 }
 
 // TODO(verification): only manifests already on disk are used, so these stay
 // unverified after a plain `download`: plain images, whose mirror checksums live
-// in the `sha256sum_<arch>.txt` / `md5sum_<arch>.txt` that `download` no longer
-// fetches, and archives carrying no manifest inside, which need
-// `--allow-unverified`. Restoring either needs an explicit source for published
-// checksums, not a fixed list of probed URLs.
+// in the `sha256sum_<arch>.txt` that `download` no longer fetches, and archives
+// carrying no manifest inside, which need `--allow-unverified`. Restoring either
+// needs an explicit source for published checksums — the image index is the
+// natural one — not a fixed list of probed URLs.
 
 /// Unpack and verify the image at `image`.
 ///
 /// An archive is unpacked into [`archive::Archive::extraction_dir`] unless that
 /// directory exists, in which case the previous extraction is reused and
 /// verified again; [`PrepareOptions::force`] unpacks it from scratch. A plain
-/// image is used in place. Every artifact is verified against the strongest
-/// manifest found next to it, and one no manifest covers is an
-/// [`Error::Unverified`] unless [`PrepareOptions::allow_unverified`] is set.
-/// Progress is reported through `progress`, one phase at a time. The network is
-/// never touched.
+/// image is used in place. Verification is driven by the manifests on disk: an
+/// artifact is hashed and compared when one covers it, a file a manifest lists
+/// is an [`Error::Missing`] when it is not there, and an artifact no manifest
+/// covers is an [`Error::Unverified`] unless
+/// [`PrepareOptions::allow_unverified`] is set. Progress is reported through
+/// `progress`, one phase at a time. The network is never touched.
 pub fn prepare<F>(image: &Path, options: &PrepareOptions, mut progress: F) -> Result<Prepared>
 where
     F: FnMut(Progress),
@@ -92,12 +98,40 @@ where
 
     let files = files(&directory)?;
     let manifests = Manifest::load(files.iter().cloned())?;
+    require_listed(&files, &manifests)?;
 
     Ok(Inputs {
         directory,
         files,
         manifests,
     })
+}
+
+/// Refuse an extraction that lacks a file its manifest lists.
+///
+/// A reused extraction can be incomplete — an interrupted unpack, a deleted
+/// artifact — and the manifest inside the archive is the only record of what
+/// the image is made of. Only artifacts are required; a manifest may also cover
+/// files that are not written to the device.
+fn require_listed(files: &[PathBuf], manifests: &[Manifest]) -> Result<()> {
+    let listed = manifests
+        .iter()
+        .flat_map(|manifest| manifest.files())
+        .filter(|name| Role::from_file_name(name).is_some());
+
+    for name in listed {
+        let present = files
+            .iter()
+            .any(|path| path.file_name().and_then(|file| file.to_str()) == Some(name));
+
+        if !present {
+            return Err(Error::Missing {
+                name: name.to_owned(),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 /// The plain image itself, with whatever manifests its directory holds.
@@ -144,21 +178,25 @@ where
         });
     }
 
-    verify(&mut artifacts, &manifests, options, progress)?;
+    let unverified = verify(&artifacts, &manifests, options, progress)?;
 
     Ok(Prepared {
         directory,
         artifacts,
+        unverified,
     })
 }
 
-/// Check every artifact against the strongest manifest that covers it.
+/// Check every artifact against the manifest that covers it.
+///
+/// Returns the artifacts no manifest covered, which the caller may only accept
+/// when [`PrepareOptions::allow_unverified`] is set.
 fn verify<F>(
-    artifacts: &mut [Artifact],
+    artifacts: &[Artifact],
     manifests: &[Manifest],
     options: &PrepareOptions,
     mut progress: F,
-) -> Result<()>
+) -> Result<Vec<PathBuf>>
 where
     F: FnMut(Progress),
 {
@@ -178,11 +216,17 @@ where
         .map(|artifact| artifact.size)
         .sum();
 
+    let mut unverified = Vec::new();
     let mut done = 0;
 
-    for artifact in artifacts.iter_mut() {
+    for artifact in artifacts {
+        if !covers(artifact) {
+            unverified.push(artifact.path.clone());
+            continue;
+        }
+
         let base = done;
-        let digest = checksum::verify(&artifact.path, manifests, |hashed| {
+        checksum::verify(&artifact.path, manifests, |hashed| {
             progress(Progress {
                 phase: Phase::Verify,
                 done: base + hashed,
@@ -190,14 +234,10 @@ where
             });
         })?;
 
-        if digest.is_some() {
-            done += artifact.size;
-        }
-
-        artifact.digest = digest;
+        done += artifact.size;
     }
 
-    Ok(())
+    Ok(unverified)
 }
 
 /// Every regular file below `root`, sorted by path.
@@ -314,12 +354,7 @@ mod tests {
         let prepared = prepare(&archive, &options, |_| {}).unwrap();
 
         assert_eq!(prepared.directory, destination);
-        assert!(
-            prepared
-                .artifacts
-                .iter()
-                .all(|artifact| artifact.digest.is_some())
-        );
+        assert!(prepared.unverified.is_empty());
 
         let artifact = prepared
             .artifacts
@@ -327,7 +362,6 @@ mod tests {
             .find(|artifact| artifact.role == Role::Root)
             .unwrap();
         assert_eq!(artifact.size, image.len() as u64);
-        assert_eq!(artifact.digest.as_ref().unwrap().value, sha256(image));
         assert!(artifact.path.is_file());
 
         std::fs::remove_dir_all(&root).unwrap();
@@ -388,7 +422,21 @@ mod tests {
         };
         let prepared = prepare(&archive, &allowed, |_| {}).unwrap();
 
-        assert!(prepared.artifacts[0].digest.is_none());
+        assert_eq!(prepared.unverified, [prepared.artifacts[0].path.clone()]);
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn rejects_a_manifest_listing_a_missing_artifact() {
+        let root = workspace("missing");
+        let manifest = manifest(&[("image.root.ext4", b"the root filesystem")]);
+        let archive = archive(&root, &[("image.sha256sum", &manifest)]);
+
+        assert!(matches!(
+            prepare(&archive, &PrepareOptions::default(), |_| {}),
+            Err(Error::Missing { name }) if name == "image.root.ext4"
+        ));
 
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -412,7 +460,7 @@ mod tests {
         assert_eq!(prepared.directory, root);
         assert_eq!(prepared.artifacts.len(), 1);
         assert_eq!(prepared.artifacts[0].role, Role::Disk);
-        assert!(prepared.artifacts[0].digest.is_some());
+        assert!(prepared.unverified.is_empty());
 
         std::fs::remove_dir_all(&root).unwrap();
     }

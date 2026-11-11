@@ -142,9 +142,10 @@ fn print_preparation(downloaded: &Path) {
 
 fn print_prepared(prepared: &Prepared) {
     for artifact in &prepared.artifacts {
-        let checksum = match &artifact.digest {
-            Some(digest) => format!("verified {}", digest.algorithm),
-            None => "unverified".to_owned(),
+        let checksum = if prepared.unverified.contains(&artifact.path) {
+            "unverified"
+        } else {
+            "verified sha256"
         };
 
         println!(
