@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use ::flash::{Plan, Source, SourceOptions};
 use anyhow::{Context, Result, bail};
-use base::date;
-use base::download;
-use base::{DeviceIndex, Image, ImageIndex, Query};
+use catalog::date;
 use clap::Args;
+use fetch::download;
 use humansize::{BINARY, format_size};
 
 use crate::cli::ImageFilterArgs;
@@ -30,15 +30,6 @@ pub struct FlashArgs {
     pub dry_run: bool,
 }
 
-/// What `flash` would write, once writing is implemented.
-enum Source {
-    /// An image resolved from the bundled index; it may need downloading.
-    Remote(Image),
-
-    /// A local image file named by the caller.
-    Local { path: PathBuf, size: u64 },
-}
-
 pub fn run(args: FlashArgs) -> Result<()> {
     if !args.dry_run {
         bail!(
@@ -46,59 +37,24 @@ pub fn run(args: FlashArgs) -> Result<()> {
         );
     }
 
-    let source = resolve_source(&args)?;
-    print_plan(&source, &args.target);
+    let plan = ::flash::plan(
+        &args.source,
+        &args.target,
+        &SourceOptions {
+            arch: args.filters.arch,
+            variant: args.filters.variant.as_deref(),
+            date: args.filters.date.as_deref(),
+        },
+    )
+    .context("failed to resolve the flash source")?;
+
+    print_plan(&plan);
 
     Ok(())
 }
 
-fn resolve_source(args: &FlashArgs) -> Result<Source> {
-    if looks_like_file(&args.source) {
-        if args.filters.arch.is_some()
-            || args.filters.variant.is_some()
-            || args.filters.date.is_some()
-        {
-            bail!("`--arch`, `--variant` and `--date` only apply when SOURCE is a device model");
-        }
-
-        let path = PathBuf::from(&args.source);
-        let metadata = std::fs::metadata(&path)
-            .with_context(|| format!("failed to read image `{}`", path.display()))?;
-
-        if !metadata.is_file() {
-            bail!("`{}` is not a regular file", path.display());
-        }
-
-        return Ok(Source::Local {
-            path,
-            size: metadata.len(),
-        });
-    }
-
-    let images = ImageIndex::embedded().context("failed to load embedded image index")?;
-    let devices = DeviceIndex::embedded().context("failed to load embedded device index")?;
-
-    let query = Query {
-        device: &args.source,
-        arch: args.filters.arch,
-        variant: args.filters.variant.as_deref(),
-        date: args.filters.date.as_deref(),
-    };
-
-    let image = images
-        .resolve(&devices, &query)
-        .context("failed to resolve an image for this device")?;
-
-    Ok(Source::Remote(image))
-}
-
-/// Whether `source` names a local image rather than a device model.
-fn looks_like_file(source: &str) -> bool {
-    source.chars().any(std::path::is_separator) || Path::new(source).is_file()
-}
-
-fn print_plan(source: &Source, target: &Path) {
-    match source {
+fn print_plan(plan: &Plan) {
+    match &plan.source {
         Source::Remote(image) => {
             println!(
                 "source: {} (built {}, {})",
@@ -120,5 +76,5 @@ fn print_plan(source: &Source, target: &Path) {
         }
     }
 
-    println!("target: {}", target.display());
+    println!("target: {}", plan.target.display());
 }

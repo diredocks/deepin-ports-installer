@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use base::date;
-use base::download::{self, Progress};
-use base::{DeviceIndex, ImageIndex, Query};
+use catalog::date;
+use catalog::{DeviceIndex, ImageIndex, Query};
 use clap::Args;
+use fetch::download::{self, Progress};
 use humansize::{BINARY, format_size};
 
 use crate::cli::ImageFilterArgs;

@@ -1,0 +1,13 @@
+[package]
+name = "sidecar-client"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sidecar-protocol = { path = "../sidecar-protocol" }
+serde_json = "1"
+thiserror = "2"
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

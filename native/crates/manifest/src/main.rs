@@ -8,8 +8,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use base::generate::{self, Options};
+mod crawl;
+
 use clap::{Args, Parser, Subcommand};
+use crawl::Options;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -36,7 +38,7 @@ struct GenerateArgs {
     output: Option<PathBuf>,
 
     /// Maximum number of concurrent HTTP requests
-    #[arg(long, value_name = "N", default_value_t = generate::DEFAULT_CONCURRENCY)]
+    #[arg(long, value_name = "N", default_value_t = crawl::DEFAULT_CONCURRENCY)]
     concurrency: usize,
 }
 
@@ -54,23 +56,23 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Generate(args) => generate(args),
+        Command::Generate(args) => generate_manifest(args),
     }
 }
 
-fn generate(args: GenerateArgs) -> Result<()> {
+fn generate_manifest(args: GenerateArgs) -> Result<()> {
     let options = Options {
         concurrency: args.concurrency,
     };
 
     let index = tokio::runtime::Runtime::new()
         .context("failed to start async runtime")?
-        .block_on(generate::image_index(&options))
+        .block_on(crawl::image_index(&options))
         .context("failed to generate image index")?;
 
     match &args.output {
         Some(path) => {
-            generate::write_file(&index, path)?;
+            crawl::write_file(&index, path)?;
             eprintln!("wrote {} image group(s) to {}", index.len(), path.display());
         }
         None => print!(

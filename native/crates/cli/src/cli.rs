@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 
-pub use base::Arch;
+pub use catalog::Arch;
 
 use crate::commands::{DevicesArgs, DownloadArgs, FlashArgs, ImagesArgs, TargetsArgs};
 use crate::render::OutputFormat;

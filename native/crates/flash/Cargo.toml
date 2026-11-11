@@ -1,0 +1,8 @@
+[package]
+name = "flash"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+catalog = { path = "../catalog" }
+thiserror = "2"

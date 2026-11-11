@@ -1,9 +1,10 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
-use base::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex, Target, TargetList};
+use catalog::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
 use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
+use drives::{Target, TargetList};
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
 
