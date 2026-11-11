@@ -1,25 +1,36 @@
 //! Orchestration shared by every Deepin Ports installer frontend.
 //!
-//! The [`cli`] binary and a future graphical installer both drive the same
-//! operations from this crate, so the rules for "which image, which device, in
-//! which order" live here rather than in either frontend.
+//! The [`cli`] binary and a future graphical installer drive the same
+//! operations, so the rules for "which image, which device, in which order"
+//! live here rather than in either frontend: [`plan`] resolves *what* to write,
+//! [`prepare`] turns the downloaded file into artifacts ready to be written.
 //!
-//! # Frontend contract
+//! * tar archives (`.tar.xz`, `.tar.gz`, `.tar`) are unpacked through [`archive`],
+//!   plain images (`.img`, `.iso`, `.ext4`, `.fat32`) are used in place;
+//! * every artifact is verified through [`checksum`] against the manifests lying
+//!   on disk next to it, never against fetched ones — an artifact that no
+//!   manifest covers is refused unless the caller accepts unverified images, and
+//!   a mismatch is always an error. They cannot tell a tampered download from a
+//!   good one; they catch truncated and corrupted builds.
 //!
-//! The crate is deliberately usable from a long-lived process:
+//! Extraction is the expensive step (several gigabytes), so [`prepare`] reuses a
+//! previous one unless asked to start over.
 //!
-//! * it never prints to stdout or stderr and never initialises logging;
-//! * it never creates or blocks on an async runtime;
-//! * every failure is a variant of [`Error`], not a formatted string, so a
-//!   frontend can react to it (offer a choice, retry, show a hint);
-//! * blocking work (spawning `lsblk` or the sidecar) will stay
-//!   behind this crate's API rather than in a frontend, and progress will be
-//!   reported through callbacks instead of log output.
+//! The crate is built for a long-lived frontend: it never prints, never
+//! initialises logging, never blocks on an async runtime, never touches the
+//! network, reports progress through [`Progress`] callbacks, and fails only with
+//! an [`Error`] variant a frontend can react to.
 //!
 //! [`cli`]: https://github.com/deepin-community/deepin-ports-installer
 
+mod artifact;
 mod error;
 mod plan;
+mod prepare;
+mod progress;
 
+pub use artifact::{Artifact, Role};
 pub use error::{Error, Result};
 pub use plan::{Plan, Source, SourceOptions, plan};
+pub use prepare::{PrepareOptions, Prepared, prepare};
+pub use progress::{Phase, Progress};

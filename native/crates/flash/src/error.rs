@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-/// Errors produced while planning or running an installation.
+/// Errors produced while planning, preparing or running an installation.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The bundled index could not be loaded or queried.
@@ -17,14 +17,35 @@ pub enum Error {
 
     /// A local source is not a regular file.
     #[error("`{path}` is not a regular file")]
-    NotAFile {
-        /// Source path that was not a file.
-        path: PathBuf,
-    },
+    NotAFile { path: PathBuf },
 
     /// Image filters were given together with a local file source.
     #[error("architecture, variant and date filters only apply when the source is a device model")]
     FiltersWithLocalSource,
+
+    /// An archive, manifest or image file could not be read.
+    #[error("failed to read `{path}`")]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// An archive could not be unpacked.
+    #[error(transparent)]
+    Archive(#[from] archive::Error),
+
+    /// An archive holds no file that can be written to a device.
+    #[error("`{path}` contains no image artifact")]
+    NoArtifacts { path: PathBuf },
+
+    /// No checksum manifest covers an artifact.
+    #[error("`{path}` is not covered by any checksum manifest")]
+    Unverified { path: PathBuf },
+
+    /// A manifest could not be read or an artifact failed verification.
+    #[error(transparent)]
+    Checksum(#[from] checksum::Error),
 }
 
 /// Convenience alias used across this crate.
