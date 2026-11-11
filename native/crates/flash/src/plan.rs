@@ -26,16 +26,6 @@ pub enum Source {
     },
 }
 
-impl Source {
-    /// Size of the image in bytes.
-    pub fn size(&self) -> u64 {
-        match self {
-            Source::Remote(image) => image.size,
-            Source::Local { size, .. } => *size,
-        }
-    }
-}
-
 /// Image filters, applied only when the source is a device model.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SourceOptions<'a> {
@@ -150,7 +140,6 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
 
         assert_eq!(source, Source::Local { path, size: 5 });
-        assert_eq!(source.size(), 5);
     }
 
     #[test]

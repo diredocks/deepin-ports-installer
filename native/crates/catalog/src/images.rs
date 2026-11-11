@@ -189,12 +189,7 @@ impl ImageIndex {
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        let document = std::fs::read_to_string(path).map_err(|source| Error::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        Self::parse(&document)
+        Self::parse(&crate::read_document(path.as_ref())?)
     }
 
     pub fn embedded() -> Result<Self> {
@@ -203,18 +198,6 @@ impl ImageIndex {
 
     pub fn groups(&self) -> &[ImageGroup] {
         &self.groups
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<'_, ImageGroup> {
-        self.groups.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.groups.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.groups.is_empty()
     }
 
     /// Resolve the newest image matching `query`.
@@ -274,7 +257,7 @@ impl ImageIndex {
     }
 
     pub fn to_json(&self) -> Result<String> {
-        Ok(serde_json::to_string_pretty(&self.groups)?)
+        crate::to_json(&self.groups)
     }
 
     /// Serialize the image groups back into the canonical
@@ -312,15 +295,6 @@ impl From<Vec<ImageGroup>> for ImageIndex {
             group.images.sort_by(|a, b| a.date.cmp(&b.date));
         }
         Self { groups }
-    }
-}
-
-impl<'a> IntoIterator for &'a ImageIndex {
-    type Item = &'a ImageGroup;
-    type IntoIter = std::slice::Iter<'a, ImageGroup>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.groups.iter()
     }
 }
 
@@ -366,7 +340,7 @@ mod tests {
     #[test]
     fn parses_groups_in_sorted_order() {
         let index = ImageIndex::parse(SAMPLE).unwrap();
-        assert_eq!(index.len(), 3);
+        assert_eq!(index.groups().len(), 3);
 
         let groups: Vec<(&str, &str)> = index
             .groups()

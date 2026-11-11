@@ -38,7 +38,7 @@ pub fn run(args: DevicesArgs) -> Result<()> {
     log::debug!(
         "matched {} device group(s) of {}",
         groups.len(),
-        index.len()
+        index.groups().len()
     );
 
     render::devices(&DeviceIndex::from(groups), args.output.format)

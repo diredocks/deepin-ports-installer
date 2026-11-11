@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::text::contains_ignore_case;
-use crate::{Arch, Error, Result};
+use crate::{Arch, Result};
 
 /// One `[[devices]]` entry from `devices.toml`: a set of device models that
 /// share the same architecture, platform and SoC.
@@ -91,12 +91,7 @@ impl DeviceIndex {
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        let document = std::fs::read_to_string(path).map_err(|source| Error::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        Self::parse(&document)
+        Self::parse(&crate::read_document(path.as_ref())?)
     }
 
     pub fn embedded() -> Result<Self> {
@@ -105,18 +100,6 @@ impl DeviceIndex {
 
     pub fn groups(&self) -> &[DeviceGroup] {
         &self.groups
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<'_, DeviceGroup> {
-        self.groups.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.groups.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.groups.is_empty()
     }
 
     /// Whether `model` is a documented device of the `soc` on `arch`.
@@ -135,7 +118,7 @@ impl DeviceIndex {
     }
 
     pub fn to_json(&self) -> Result<String> {
-        Ok(serde_json::to_string_pretty(&self.groups)?)
+        crate::to_json(&self.groups)
     }
 
     pub fn to_toml(&self) -> Result<String> {
@@ -153,15 +136,6 @@ impl DeviceIndex {
 impl From<Vec<DeviceGroup>> for DeviceIndex {
     fn from(groups: Vec<DeviceGroup>) -> Self {
         Self { groups }
-    }
-}
-
-impl<'a> IntoIterator for &'a DeviceIndex {
-    type Item = &'a DeviceGroup;
-    type IntoIter = std::slice::Iter<'a, DeviceGroup>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.groups.iter()
     }
 }
 
@@ -192,7 +166,7 @@ mod tests {
     #[test]
     fn parses_groups_in_file_order() {
         let index = DeviceIndex::parse(SAMPLE).unwrap();
-        assert_eq!(index.len(), 2);
+        assert_eq!(index.groups().len(), 2);
 
         let first = &index.groups()[0];
         assert_eq!(first.arch, Arch::Riscv);
@@ -214,6 +188,21 @@ mod tests {
 
         assert!(rendered.contains("[[devices]]"));
         assert_eq!(DeviceIndex::parse(&rendered).unwrap(), index);
+    }
+
+    #[test]
+    fn parse_file_reads_a_document() {
+        let path = std::env::temp_dir().join(format!("deepin-devices-{}.toml", std::process::id()));
+
+        std::fs::write(&path, SAMPLE).unwrap();
+        let index = DeviceIndex::parse_file(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(index, DeviceIndex::parse(SAMPLE).unwrap());
+        assert!(matches!(
+            DeviceIndex::parse_file(&path),
+            Err(crate::Error::Io { .. })
+        ));
     }
 
     #[test]

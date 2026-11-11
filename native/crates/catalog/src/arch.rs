@@ -17,9 +17,6 @@ pub enum Arch {
 }
 
 impl Arch {
-    /// Every architecture, in the order used by the generated `images.toml`.
-    pub const ALL: [Arch; 4] = [Arch::Riscv, Arch::Arm64, Arch::Amd64, Arch::Loong64];
-
     /// The TOML slug of this architecture, e.g. `riscv`.
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -51,30 +48,15 @@ impl FromStr for Arch {
     }
 }
 
-impl TryFrom<&str> for Arch {
-    type Error = Error;
-
-    fn try_from(slug: &str) -> Result<Self> {
-        slug.parse()
-    }
-}
-
-impl From<Arch> for &'static str {
-    fn from(arch: Arch) -> Self {
-        arch.as_str()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn slug_round_trips() {
-        for arch in Arch::ALL {
+        for arch in [Arch::Riscv, Arch::Arm64, Arch::Amd64, Arch::Loong64] {
             assert_eq!(Arch::from_str(arch.as_str()).unwrap(), arch);
             assert_eq!(arch.to_string(), arch.as_str());
-            assert_eq!(<&str>::from(arch), arch.as_str());
         }
     }
 

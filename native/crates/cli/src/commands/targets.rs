@@ -19,15 +19,15 @@ pub struct TargetsArgs {
 pub fn run(args: TargetsArgs) -> Result<()> {
     let targets = TargetList::scan().context("failed to list local block devices")?;
 
-    log::debug!("found {} local target(s)", targets.len());
+    log::debug!("found {} local target(s)", targets.targets().len());
 
-    let targets = if args.all {
+    let list = if args.all {
         targets
     } else {
         TargetList::new(targets.into_iter().filter(Target::is_flashable).collect())
     };
 
-    if targets.is_empty() {
+    if list.targets().is_empty() {
         if args.all {
             log::info!("no local block devices found");
         } else {
@@ -37,5 +37,5 @@ pub fn run(args: TargetsArgs) -> Result<()> {
         }
     }
 
-    render::targets(&targets, args.output.format)
+    render::targets(&list, args.output.format)
 }

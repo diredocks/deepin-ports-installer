@@ -22,4 +22,4 @@ mod error;
 mod plan;
 
 pub use error::{Error, Result};
-pub use plan::{Plan, Source, SourceOptions, plan, resolve};
+pub use plan::{Plan, Source, SourceOptions, plan};

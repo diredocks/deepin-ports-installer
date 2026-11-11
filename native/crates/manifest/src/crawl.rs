@@ -54,14 +54,6 @@ pub struct Options {
     pub concurrency: usize,
 }
 
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            concurrency: DEFAULT_CONCURRENCY,
-        }
-    }
-}
-
 /// Crawl the image repository and build an image index.
 pub async fn image_index(options: &Options) -> Result<ImageIndex> {
     let base = BASE.trim_end_matches('/');

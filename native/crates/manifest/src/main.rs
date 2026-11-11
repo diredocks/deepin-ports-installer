@@ -73,7 +73,11 @@ fn generate_manifest(args: GenerateArgs) -> Result<()> {
     match &args.output {
         Some(path) => {
             crawl::write_file(&index, path)?;
-            eprintln!("wrote {} image group(s) to {}", index.len(), path.display());
+            eprintln!(
+                "wrote {} image group(s) to {}",
+                index.groups().len(),
+                path.display()
+            );
         }
         None => print!(
             "{}",

@@ -267,18 +267,6 @@ impl TargetList {
         &self.targets
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Target> {
-        self.targets.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.targets.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.targets.is_empty()
-    }
-
     pub fn to_json(&self) -> Result<String> {
         Ok(serde_json::to_string_pretty(&self.targets)?)
     }

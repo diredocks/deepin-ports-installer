@@ -36,7 +36,11 @@ pub fn run(args: ImagesArgs) -> Result<()> {
         },
     });
 
-    log::debug!("matched {} image group(s) of {}", groups.len(), index.len());
+    log::debug!(
+        "matched {} image group(s) of {}",
+        groups.len(),
+        index.groups().len()
+    );
 
     render::images(&ImageIndex::from(groups), args.output.format)
 }

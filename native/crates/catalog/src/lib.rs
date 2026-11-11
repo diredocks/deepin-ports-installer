@@ -15,7 +15,7 @@ pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex, DeviceQuery};
 pub use images::{Candidate, Image, ImageFilter, ImageGroup, ImageIndex, ImageQuery, Query};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Errors produced while loading the bundled TOML indexes.
 #[derive(Debug, thiserror::Error)]
@@ -78,4 +78,18 @@ fn format_candidates(candidates: &[Candidate]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// Serialize a device or image group list as pretty JSON, the format shared by
+/// every index.
+pub(crate) fn to_json<T: serde::Serialize + ?Sized>(groups: &T) -> Result<String> {
+    Ok(serde_json::to_string_pretty(groups)?)
+}
+
+/// Read a TOML index document from `path`, shared by both `parse_file`s.
+pub(crate) fn read_document(path: &Path) -> Result<String> {
+    std::fs::read_to_string(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })
 }
