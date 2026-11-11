@@ -245,6 +245,11 @@ where
 {
     use std::io::Write;
 
+    // TODO: retry a body that breaks mid-stream instead of failing the whole
+    // transfer. `ci.deepin.com` closes the connection after roughly 1.09 GiB
+    // and a lossy link errors out sooner, so a single drop wastes a
+    // multi-gigabyte download; resuming only happens when the user re-runs the
+    // command by hand.
     while let Some(chunk) = response.chunk().await.map_err(|source| Error::Request {
         url: url.to_owned(),
         source,
