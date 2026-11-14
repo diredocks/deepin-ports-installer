@@ -41,6 +41,16 @@ pub enum Error {
     /// A manifest could not be read or an artifact failed verification.
     #[error(transparent)]
     Checksum(#[from] checksum::Error),
+
+    /// A frontend asked for a write method the device group does not list.
+    #[error("`{via}` is not a write method of the `{soc}` devices")]
+    UnsupportedFlashVia {
+        /// Requested write method.
+        via: catalog::FlashVia,
+
+        /// SoC of the device group that does not support it.
+        soc: String,
+    },
 }
 
 /// Convenience alias used across this crate.

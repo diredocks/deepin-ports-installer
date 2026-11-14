@@ -2,10 +2,10 @@
 
 use std::path::{Path, PathBuf};
 
+use catalog::{Artifact, Role};
 use checksum::Manifest;
 use fsx::Amount;
 
-use crate::artifact::{Artifact, Role};
 use crate::progress::{Phase, Progress};
 use crate::{Error, Result};
 
@@ -164,11 +164,13 @@ where
 
     let mut artifacts = Vec::new();
     for path in files {
-        if let Some(artifact) = Artifact::detect(&path)? {
+        if let Some(artifact) = detect(&path)? {
             artifacts.push(artifact);
         }
     }
-    artifacts.sort_by(Artifact::order);
+    artifacts.sort_by(|left, right| {
+        (left.role.rank(), &left.path).cmp(&(right.role.rank(), &right.path))
+    });
 
     if artifacts.is_empty() {
         return Err(Error::NoArtifacts {
@@ -183,6 +185,30 @@ where
         artifacts,
         unverified,
     })
+}
+
+/// Recognise `path` as an artifact; `None` when it is not an image file.
+fn detect(path: &Path) -> Result<Option<Artifact>> {
+    let role = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(Role::from_file_name);
+
+    let Some(role) = role else {
+        return Ok(None);
+    };
+
+    let metadata = fsx::metadata(path)?;
+
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+
+    Ok(Some(Artifact {
+        path: path.to_path_buf(),
+        role,
+        size: metadata.len(),
+    }))
 }
 
 /// Check every artifact against the manifest that covers it.

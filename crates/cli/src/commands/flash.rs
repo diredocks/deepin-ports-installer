@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use ::flash::{Plan, PrepareOptions, Prepared, Source, SourceOptions};
+use ::flash::{PrepareOptions, Prepared, Source, SourceOptions};
 use anyhow::{Context, Result, bail, ensure};
 use archive::Archive;
 use catalog::date;
@@ -42,12 +42,13 @@ pub struct FlashArgs {
 
 pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     let options = SourceOptions::from(&args.filters);
-    let plan = ::flash::plan(&args.source, &args.target, &options)
-        .context("failed to resolve the flash source")?;
+    let source =
+        ::flash::resolve(&args.source, &options).context("failed to resolve the flash source")?;
 
-    print_plan(&plan);
+    print_source(&source);
+    println!("target: {}", args.target.display());
 
-    let downloaded = archive_path(&plan)?;
+    let downloaded = source_path(&source)?;
 
     if args.dry_run {
         print_preparation(&downloaded);
@@ -85,23 +86,27 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
+    // TODO(privileged): writing a device needs root, so it goes through the
+    // sidecar: launch `sidecar_client::Client`, build the job with `flash::job`
+    // from the prepared artifacts and the `flash_via` method the device group
+    // lists, and stream the helper's progress onto the bar.
     todo!(
         "writing images to block devices is not implemented yet; the artifacts are prepared in {}",
         prepared.directory.display()
     )
 }
 
-/// Where the archive the plan names is, or will be, cached.
-fn archive_path(plan: &Plan) -> Result<PathBuf> {
-    match &plan.source {
+/// Where the image the source names is, or will be, cached.
+fn source_path(source: &Source) -> Result<PathBuf> {
+    match source {
         Source::Remote(image) => download::destination(None, &image.link)
             .context("failed to resolve the download destination"),
         Source::Local { path, .. } => Ok(path.clone()),
     }
 }
 
-fn print_plan(plan: &Plan) {
-    match &plan.source {
+fn print_source(source: &Source) {
+    match source {
         Source::Remote(image) => {
             println!(
                 "source: {} (built {}, {})",
@@ -122,8 +127,6 @@ fn print_plan(plan: &Plan) {
             );
         }
     }
-
-    println!("target: {}", plan.target.display());
 }
 
 fn print_preparation(downloaded: &Path) {

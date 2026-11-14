@@ -22,7 +22,7 @@ pub fn devices(index: &DeviceIndex, format: OutputFormat) -> Result<()> {
         OutputFormat::Toml => print_document(&index.to_toml()?),
         OutputFormat::Table => {
             let rows = index.groups().iter().map(device_row).collect::<Vec<_>>();
-            print_table(&["Arch", "SOC", "Platform", "Devices"], &rows);
+            print_table(&["Arch", "SOC", "Platform", "Devices", "Flash"], &rows);
             Ok(())
         }
     }
@@ -66,11 +66,23 @@ pub fn targets(list: &TargetList, format: OutputFormat) -> Result<()> {
 }
 
 fn device_row(group: &DeviceGroup) -> Vec<String> {
+    let flash = if group.flash_via.is_empty() {
+        "-".to_owned()
+    } else {
+        group
+            .flash_via
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
     vec![
         group.arch.to_string(),
         group.soc.clone(),
         group.platform.clone(),
         group.devices.join(", "),
+        flash,
     ]
 }
 

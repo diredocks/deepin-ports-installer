@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::text::contains_ignore_case;
-use crate::{Arch, Result};
+use crate::{Arch, FlashVia, Result};
 
 /// One `[[devices]]` entry from `devices.toml`: a set of device models that
 /// share the same architecture, platform and SoC.
@@ -24,6 +24,14 @@ pub struct DeviceGroup {
     /// Documentation links for installing on these devices.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<String>,
+
+    /// Write methods these devices accept, in preference order.
+    ///
+    /// The same board can need a different method per medium: eic7700 writes
+    /// SD cards and SATA/NVMe drives through partitions but its eMMC through
+    /// fastboot.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flash_via: Vec<FlashVia>,
 }
 
 impl DeviceGroup {
@@ -160,6 +168,10 @@ mod tests {
         links = [
             "https://example.com/jh7110",
         ]
+        flash_via = [
+            "dd-whole",
+            "fastboot",
+        ]
 
         [[devices]]
         arch = "arm64"
@@ -179,11 +191,13 @@ mod tests {
         assert_eq!(first.soc, "jh7110");
         assert_eq!(first.devices, ["visionfive-2", "milkv-mars"]);
         assert_eq!(first.links, ["https://example.com/jh7110"]);
+        assert_eq!(first.flash_via, [FlashVia::DdWhole, FlashVia::Fastboot]);
 
         let second = &index.groups()[1];
         assert_eq!(second.arch, Arch::Arm64);
         assert_eq!(second.devices, ["phytium-pi"]);
         assert!(second.links.is_empty());
+        assert!(second.flash_via.is_empty());
     }
 
     #[test]

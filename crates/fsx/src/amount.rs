@@ -1,11 +1,15 @@
 //! Bytes processed by a long-running operation.
 
+use serde::{Deserialize, Serialize};
+
 /// Work done so far, and how much is expected.
 ///
 /// One type serves every operation that streams data: downloading a file,
-/// unpacking an archive, hashing an artifact. Operations that run in phases
-/// carry an [`Amount`] next to the phase instead of duplicating the pair.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// unpacking an archive, hashing an artifact, writing one to a device. Operations
+/// that run in phases carry an [`Amount`] next to the phase instead of duplicating
+/// the pair, and so does the helper protocol: a write report is an [`Amount`] sent
+/// over the socket.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Amount {
     /// Bytes processed so far.
     pub done: u64,

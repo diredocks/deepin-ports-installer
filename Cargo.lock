@@ -560,6 +560,7 @@ dependencies = [
  "catalog",
  "checksum",
  "fsx",
+ "sidecar-protocol",
  "testutils",
  "thiserror",
 ]
@@ -588,6 +589,7 @@ dependencies = [
 name = "fsx"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "testutils",
  "thiserror",
 ]
@@ -1610,6 +1612,8 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 name = "sidecar"
 version = "0.1.0"
 dependencies = [
+ "catalog",
+ "fsx",
  "futures-util",
  "serde_json",
  "sidecar-protocol",
@@ -1624,6 +1628,7 @@ dependencies = [
 name = "sidecar-client"
 version = "0.1.0"
 dependencies = [
+ "fsx",
  "libc",
  "serde_json",
  "sidecar-protocol",
@@ -1635,6 +1640,8 @@ dependencies = [
 name = "sidecar-protocol"
 version = "0.1.0"
 dependencies = [
+ "catalog",
+ "fsx",
  "serde",
  "serde_json",
 ]

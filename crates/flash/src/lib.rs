@@ -2,8 +2,9 @@
 //!
 //! The [`cli`] binary and a future graphical installer drive the same
 //! operations, so the rules for "which image, which device, in which order"
-//! live here rather than in either frontend: [`plan`] resolves *what* to write,
-//! [`prepare`] turns the downloaded file into artifacts ready to be written.
+//! live here rather than in either frontend: [`resolve`] decides which image to
+//! use, [`prepare`] turns the downloaded file into artifacts ready to be written,
+//! and [`job`] describes the privileged write that follows.
 //!
 //! * tar archives (`.tar.xz`, `.tar.gz`, `.tar`) are unpacked through [`archive`],
 //!   plain images (`.img`, `.iso`, `.ext4`, `.fat32`) are used in place;
@@ -17,6 +18,13 @@
 //! Extraction is the expensive step (several gigabytes), so [`prepare`] reuses a
 //! previous one unless asked to start over.
 //!
+//! Writing is the one thing this crate does not do. The installer runs
+//! unprivileged, so the artifacts go to the privileged helper as a
+//! [`FlashPlan`](sidecar_protocol::flash::FlashPlan) built by [`job`], and the
+//! helper — which links its own write drivers — re-checks the plan and writes it.
+//! The drivers are only scaffolded for now: they document their steps and end in
+//! `todo!()`.
+//!
 //! The crate is built for a long-lived frontend: it never prints, never
 //! initialises logging, never blocks on an async runtime, never touches the
 //! network, reports progress through [`Progress`] callbacks, and fails only with
@@ -24,14 +32,16 @@
 //!
 //! [`cli`]: https://github.com/deepin-community/deepin-ports-installer
 
-mod artifact;
 mod error;
-mod plan;
+mod job;
 mod prepare;
 mod progress;
+mod source;
 
-pub use artifact::{Artifact, Role};
 pub use error::{Error, Result};
-pub use plan::{Plan, Source, SourceOptions, plan};
+pub use job::job;
 pub use prepare::{PrepareOptions, Prepared, prepare};
 pub use progress::{Phase, Progress};
+pub use source::{Source, SourceOptions, resolve};
+
+pub use catalog::{Artifact, Role};

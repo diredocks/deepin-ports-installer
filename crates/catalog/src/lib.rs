@@ -3,16 +3,25 @@
 //! This crate is intentionally free of I/O beyond reading the TOML documents it
 //! parses: no process spawning, no HTTP, no privileged code. Both frontends
 //! (the CLI and a future graphical installer) use it as their source of truth
-//! for architectures, devices and images.
+//! for architectures, devices, images and the artifacts an image unpacks into.
+//!
+//! The artifact model lives here rather than in the crate that detects files or
+//! the helper that writes them, because both sides must agree on it: the
+//! unprivileged side recognises an [`Artifact`] by name, and the plan it sends to
+//! the privileged helper carries the same value.
 
 pub mod arch;
+pub mod artifact;
 pub mod date;
 pub mod devices;
+pub mod flash;
 pub mod images;
 mod text;
 
 pub use arch::Arch;
+pub use artifact::{Artifact, Role};
 pub use devices::{DeviceGroup, DeviceIndex, DeviceQuery};
+pub use flash::FlashVia;
 pub use images::{Candidate, Image, ImageIndex, ImageQuery, Query};
 
 use std::path::Path;

@@ -1,8 +1,9 @@
-//! Resolving what to write, and where.
+//! Resolving which image to flash.
 //!
 //! A flash source is either a local image file or a device model that the
-//! bundled index maps to an image. Both are resolved into a [`Plan`] that a
-//! frontend can show and later execute.
+//! bundled index maps to an image. Where that image is written comes later, in
+//! [`job`](crate::job), once the artifacts are prepared and the device group is
+//! known.
 
 use std::path::PathBuf;
 
@@ -10,7 +11,7 @@ use catalog::{Arch, DeviceIndex, Image, ImageIndex, Query};
 
 use crate::{Error, Result};
 
-/// The image that a flash operation will write.
+/// The image a flash operation will write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     /// An image resolved from the bundled index; it may need downloading.
@@ -46,28 +47,10 @@ impl SourceOptions<'_> {
     }
 }
 
-/// What a flash operation would write, and where.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Plan {
-    /// Image to write.
-    pub source: Source,
-
-    /// Block device (or image file) to write to.
-    pub target: PathBuf,
-}
-
-/// Build the plan for writing `source` to `target`.
+/// Resolve what `source` names.
 ///
 /// `source` is treated as a local file when it contains a path separator or
 /// names an existing file, and as a device model otherwise.
-pub fn plan(source: &str, target: impl Into<PathBuf>, options: &SourceOptions<'_>) -> Result<Plan> {
-    Ok(Plan {
-        source: resolve(source, options)?,
-        target: target.into(),
-    })
-}
-
-/// Resolve what `source` names, without looking at the target.
 pub fn resolve(source: &str, options: &SourceOptions<'_>) -> Result<Source> {
     match local_path(source) {
         Some(path) => local(path, options),
@@ -201,13 +184,5 @@ mod tests {
             arch: Arch::Riscv,
             device: "generic".to_owned(),
         }));
-    }
-
-    #[test]
-    fn builds_plans() {
-        let plan = plan("visionfive-2", "/dev/sdb", &options()).unwrap();
-
-        assert!(matches!(plan.source, Source::Remote(_)));
-        assert_eq!(plan.target, PathBuf::from("/dev/sdb"));
     }
 }

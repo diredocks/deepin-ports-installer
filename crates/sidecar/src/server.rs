@@ -19,8 +19,10 @@ use tungstenite::handshake::server::{
 };
 use tungstenite::http::{Response as HttpResponse, StatusCode};
 
+use crate::driver;
 use crate::platform;
 use crate::{Error, Result};
+use sidecar_protocol::flash::FlashPlan;
 use sidecar_protocol::{Handshake, Reply, Request};
 
 /// How long to wait for the client to connect.
@@ -116,8 +118,32 @@ async fn handle_request(socket: &mut WebSocketStream<TcpStream>, text: &str) -> 
                 .map_err(Error::WebSocket)?;
             Ok(false)
         }
+        Request::Flash { plan } => {
+            handle_flash(socket, &plan).await?;
+            Ok(false)
+        }
         Request::Shutdown => Ok(true),
     }
+}
+
+/// Run a flash job, streaming its progress to the client.
+///
+/// The job ends with exactly one `Reply::Ok` or `Reply::Error`.
+///
+/// TODO(flash): the drivers report progress through a synchronous callback while
+/// this task owns the socket, so the implementation has to forward those reports
+/// — through a channel plus a task that writes the frames — instead of awaiting
+/// inside the callback. Keeping the driver synchronous also keeps it testable
+/// without a runtime.
+async fn handle_flash(_socket: &mut WebSocketStream<TcpStream>, plan: &FlashPlan) -> Result<()> {
+    // TODO(progress): the driver reports through a synchronous callback while
+    // this task owns the socket, so the reports have to be forwarded through a
+    // channel and a task that writes the frames; a callback cannot await.
+    driver::write(plan, &mut |_progress| {})?;
+
+    // TODO(flash): reply with `Reply::Ok` when the job finished, or `Reply::Error`
+    // when it failed, and keep serving until the client shuts the helper down.
+    todo!("send the job's outcome back to the client")
 }
 
 /// Whether the WebSocket request carries the expected token.

@@ -9,7 +9,7 @@
 //! everywhere.
 //!
 //! Nothing here is asynchronous, spawns a process or touches the network. The
-//! crate depends on `std` and `thiserror` only.
+//! crate depends on `std`, `serde` and `thiserror` only.
 
 pub mod amount;
 pub mod chunked;

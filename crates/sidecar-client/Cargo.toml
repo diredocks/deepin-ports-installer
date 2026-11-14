@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 sidecar-protocol = { path = "../sidecar-protocol" }
+fsx = { path = "../fsx" }
 serde_json = "1"
 thiserror = "2"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }

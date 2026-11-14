@@ -391,6 +391,7 @@ mod tests {
             soc: soc.to_owned(),
             devices: devices.iter().map(|device| (*device).to_owned()).collect(),
             links: Vec::new(),
+            flash_via: Vec::new(),
         }])
     }
 
