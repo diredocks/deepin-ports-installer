@@ -12,8 +12,6 @@ use crate::{Error, Result};
 pub enum Arch {
     Riscv,
     Arm64,
-    Amd64,
-    Loong64,
 }
 
 impl Arch {
@@ -22,8 +20,6 @@ impl Arch {
         match self {
             Arch::Riscv => "riscv",
             Arch::Arm64 => "arm64",
-            Arch::Amd64 => "amd64",
-            Arch::Loong64 => "loong64",
         }
     }
 }
@@ -41,8 +37,6 @@ impl FromStr for Arch {
         match slug {
             "riscv" => Ok(Arch::Riscv),
             "arm64" => Ok(Arch::Arm64),
-            "amd64" => Ok(Arch::Amd64),
-            "loong64" => Ok(Arch::Loong64),
             other => Err(Error::UnknownArch(other.to_owned())),
         }
     }
@@ -54,7 +48,7 @@ mod tests {
 
     #[test]
     fn slug_round_trips() {
-        for arch in [Arch::Riscv, Arch::Arm64, Arch::Amd64, Arch::Loong64] {
+        for arch in [Arch::Riscv, Arch::Arm64] {
             assert_eq!(Arch::from_str(arch.as_str()).unwrap(), arch);
         }
     }

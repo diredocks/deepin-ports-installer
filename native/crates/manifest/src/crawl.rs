@@ -195,11 +195,13 @@ fn is_date_dir(entry: &Entry) -> bool {
 
 /// Map a repository architecture directory to a supported [`Arch`].
 ///
-/// Only `riscv64` differs from the [`Arch`] slug; the rest parse directly.
+/// Only `riscv64` differs from the [`Arch`] slug; every other directory is
+/// ignored, so images of unsupported architectures are never recorded.
 fn arch_from_dir(dir: &str) -> Option<Arch> {
     match dir {
         "riscv64" => Some(Arch::Riscv),
-        other => other.parse().ok(),
+        "arm64" => Some(Arch::Arm64),
+        _ => None,
     }
 }
 
@@ -324,11 +326,11 @@ mod tests {
     }
 
     #[test]
-    fn maps_known_architectures_only() {
+    fn maps_supported_architectures_only() {
         assert_eq!(arch_from_dir("riscv64"), Some(Arch::Riscv));
         assert_eq!(arch_from_dir("arm64"), Some(Arch::Arm64));
-        assert_eq!(arch_from_dir("amd64"), Some(Arch::Amd64));
-        assert_eq!(arch_from_dir("loong64"), Some(Arch::Loong64));
+        assert_eq!(arch_from_dir("amd64"), None);
+        assert_eq!(arch_from_dir("loong64"), None);
         assert_eq!(arch_from_dir("mips64el"), None);
     }
 
@@ -416,11 +418,11 @@ mod tests {
     fn extracts_timestamp_before_trailing_suffixes() {
         let record = record_from(
             "https://example.com",
-            Arch::Amd64,
+            Arch::Arm64,
             "20240111/",
-            "amd64",
+            "arm64",
             &entry(
-                "deepin-23-beige-beta3-amd64-20240111-115726_kernel-6.7.iso",
+                "deepin-23-beige-beta3-arm64-20240111-115726_kernel-6.7.iso",
                 4572413952,
             ),
         )
