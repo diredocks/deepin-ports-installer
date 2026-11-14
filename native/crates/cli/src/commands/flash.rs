@@ -31,9 +31,9 @@ pub struct FlashArgs {
     #[arg(short, long)]
     pub force: bool,
 
-    /// Accept an image that no checksum manifest covers (e.g. an ISO)
+    /// Skip checksum verification and take the image as it is (e.g. an ISO)
     #[arg(long)]
-    pub allow_unverified: bool,
+    pub skip_verify: bool,
 
     /// Print the resolved source, target and extraction directory without preparing anything
     #[arg(short = 'n', long)]
@@ -70,7 +70,7 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     let options = PrepareOptions {
         force: args.force,
-        allow_unverified: args.allow_unverified,
+        skip_verify: args.skip_verify,
     };
 
     log::info!("preparing {}", downloaded.display());
@@ -84,7 +84,7 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     let prepared = match result {
         Ok(prepared) => prepared,
         Err(::flash::Error::Unverified { path }) => bail!(
-            "`{}` is not covered by any checksum manifest; pass `--allow-unverified` to accept it",
+            "`{}` is not covered by any checksum manifest; pass `--skip-verify` to accept it",
             path.display()
         ),
         Err(error) => return Err(error).context("failed to prepare the image"),

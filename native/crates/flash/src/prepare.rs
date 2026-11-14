@@ -15,8 +15,8 @@ pub struct PrepareOptions {
     /// Unpack the archive again instead of reusing a previous extraction.
     pub force: bool,
 
-    /// Accept artifacts that no checksum manifest covers.
-    pub allow_unverified: bool,
+    /// Skip verification, accepting whatever the image contains.
+    pub skip_verify: bool,
 }
 
 /// An image that is unpacked and verified, ready to be written.
@@ -28,16 +28,16 @@ pub struct Prepared {
     /// Artifacts found there, in flash order.
     pub artifacts: Vec<Artifact>,
 
-    /// Artifacts no checksum manifest covered, in flash order.
-    ///
-    /// Only possible when [`PrepareOptions::allow_unverified`] is set.
+    /// Artifacts that were not hashed against a checksum manifest, in flash
+    /// order: those no manifest covered, or every one when
+    /// [`PrepareOptions::skip_verify`] is set.
     pub unverified: Vec<PathBuf>,
 }
 
 // TODO(verification): only manifests already on disk are used, so these stay
 // unverified after a plain `download`: plain images, whose mirror checksums live
 // in the `sha256sum_<arch>.txt` that `download` no longer fetches, and archives
-// carrying no manifest inside, which need `--allow-unverified`. Restoring either
+// carrying no manifest inside, which need `--skip-verify`. Restoring either
 // needs an explicit source for published checksums — the image index is the
 // natural one — not a fixed list of probed URLs.
 
@@ -49,9 +49,10 @@ pub struct Prepared {
 /// image is used in place. Verification is driven by the manifests on disk: an
 /// artifact is hashed and compared when one covers it, a file a manifest lists
 /// is an [`Error::Missing`] when it is not there, and an artifact no manifest
-/// covers is an [`Error::Unverified`] unless
-/// [`PrepareOptions::allow_unverified`] is set. Progress is reported through
-/// `progress`, one phase at a time. The network is never touched.
+/// covers is an [`Error::Unverified`] — unless
+/// [`PrepareOptions::skip_verify`] is set, in which case nothing is hashed at
+/// all. Progress is reported through `progress`, one phase at a time. The
+/// network is never touched.
 pub fn prepare<F>(image: &Path, options: &PrepareOptions, mut progress: F) -> Result<Prepared>
 where
     F: FnMut(Progress),
@@ -186,8 +187,8 @@ where
 
 /// Check every artifact against the manifest that covers it.
 ///
-/// Returns the artifacts no manifest covered, which the caller may only accept
-/// when [`PrepareOptions::allow_unverified`] is set.
+/// Returns the artifacts that were not hashed: those no manifest covered, or
+/// every artifact when [`PrepareOptions::skip_verify`] is set.
 fn verify<F>(
     artifacts: &[Artifact],
     manifests: &[Manifest],
@@ -197,11 +198,16 @@ fn verify<F>(
 where
     F: FnMut(Progress),
 {
+    if options.skip_verify {
+        return Ok(artifacts
+            .iter()
+            .map(|artifact| artifact.path.clone())
+            .collect());
+    }
+
     let covers = |artifact: &Artifact| checksum::manifest_for(manifests, &artifact.path).is_some();
 
-    if !options.allow_unverified
-        && let Some(artifact) = artifacts.iter().find(|artifact| !covers(artifact))
-    {
+    if let Some(artifact) = artifacts.iter().find(|artifact| !covers(artifact)) {
         return Err(Error::Unverified {
             path: artifact.path.clone(),
         });
@@ -312,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn requires_a_checksum_unless_allowed() {
+    fn requires_a_checksum_by_default() {
         let root = Workspace::new("deepin-ports-flash", "unverified");
         let archive = tar_xz(&root, &[("image.root.ext4", b"payload")]);
 
@@ -321,11 +327,30 @@ mod tests {
             Err(Error::Unverified { .. })
         ));
 
-        let allowed = PrepareOptions {
-            allow_unverified: true,
+        let skipped = PrepareOptions {
+            skip_verify: true,
             ..PrepareOptions::default()
         };
-        let prepared = prepare(&archive, &allowed, |_| {}).unwrap();
+        let prepared = prepare(&archive, &skipped, |_| {}).unwrap();
+
+        assert_eq!(prepared.unverified, [prepared.artifacts[0].path.clone()]);
+    }
+
+    #[test]
+    fn skips_a_mismatched_checksum_when_asked() {
+        let root = Workspace::new("deepin-ports-flash", "skip-mismatch");
+        let image = b"corrupted";
+        let manifest = manifest(&[("image.root.ext4", b"expected")]);
+        let archive = tar_xz(
+            &root,
+            &[("image.root.ext4", image), ("image.sha256sum", &manifest)],
+        );
+
+        let skipped = PrepareOptions {
+            skip_verify: true,
+            ..PrepareOptions::default()
+        };
+        let prepared = prepare(&archive, &skipped, |_| {}).unwrap();
 
         assert_eq!(prepared.unverified, [prepared.artifacts[0].path.clone()]);
     }
