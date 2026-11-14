@@ -41,16 +41,9 @@ pub struct FlashArgs {
 }
 
 pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
-    let plan = ::flash::plan(
-        &args.source,
-        &args.target,
-        &SourceOptions {
-            arch: args.filters.arch,
-            variant: args.filters.variant.as_deref(),
-            date: args.filters.date.as_deref(),
-        },
-    )
-    .context("failed to resolve the flash source")?;
+    let options = SourceOptions::from(&args.filters);
+    let plan = ::flash::plan(&args.source, &args.target, &options)
+        .context("failed to resolve the flash source")?;
 
     print_plan(&plan);
 

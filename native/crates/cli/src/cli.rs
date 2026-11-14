@@ -65,14 +65,6 @@ pub enum Command {
     Flash(FlashArgs),
 }
 
-/// Architecture filter.
-#[derive(Debug, Args)]
-pub struct ArchArg {
-    /// Only match this architecture
-    #[arg(short, long, value_enum)]
-    pub arch: Option<Arch>,
-}
-
 /// Image selection shared by `images`, `download` and `flash`.
 #[derive(Debug, Args)]
 pub struct ImageFilterArgs {
@@ -87,6 +79,16 @@ pub struct ImageFilterArgs {
     /// Only match builds published on this day (YYYYMMDD or YYYY-MM-DD)
     #[arg(long, value_name = "DATE")]
     pub date: Option<String>,
+}
+
+impl<'a> From<&'a ImageFilterArgs> for flash::SourceOptions<'a> {
+    fn from(args: &'a ImageFilterArgs) -> Self {
+        Self {
+            arch: args.arch,
+            variant: args.variant.as_deref(),
+            date: args.date.as_deref(),
+        }
+    }
 }
 
 /// Output format selector.

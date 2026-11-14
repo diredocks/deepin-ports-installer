@@ -26,7 +26,7 @@ pub struct ImagesArgs {
 pub fn run(args: ImagesArgs) -> Result<()> {
     let index = ImageIndex::embedded().context("failed to load embedded image index")?;
 
-    let images = index.filter(&ImageQuery {
+    let filtered = index.filtered(&ImageQuery {
         arch: args.filters.arch,
         device: args.device.as_deref(),
         variant: args.filters.variant.as_deref(),
@@ -36,9 +36,9 @@ pub fn run(args: ImagesArgs) -> Result<()> {
 
     log::debug!(
         "matched {} of {} image(s)",
-        images.len(),
+        filtered.images().len(),
         index.images().len()
     );
 
-    render::images(&ImageIndex::from(images), args.output.format)
+    render::images(&filtered, args.output.format)
 }

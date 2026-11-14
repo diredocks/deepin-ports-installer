@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use catalog::{DeviceIndex, DeviceQuery};
+use catalog::{Arch, DeviceIndex, DeviceQuery};
 
-use crate::cli::{ArchArg, FormatArg};
+use crate::cli::FormatArg;
 use crate::render;
 
 #[derive(Debug, Args)]
@@ -12,8 +12,9 @@ pub struct DevicesArgs {
     #[arg(value_name = "DEVICE")]
     pub device: Option<String>,
 
-    #[command(flatten)]
-    pub arch: ArchArg,
+    /// Only match this architecture
+    #[arg(short, long, value_enum)]
+    pub arch: Option<Arch>,
 
     /// Only show devices with this SoC
     #[arg(short, long, value_name = "SOC")]
@@ -26,20 +27,17 @@ pub struct DevicesArgs {
 pub fn run(args: DevicesArgs) -> Result<()> {
     let index = DeviceIndex::embedded().context("failed to load embedded device index")?;
 
-    let groups = index
-        .filter(&DeviceQuery {
-            arch: args.arch.arch,
-            soc: args.soc.as_deref(),
-            device: args.device.as_deref(),
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+    let filtered = index.filtered(&DeviceQuery {
+        arch: args.arch,
+        soc: args.soc.as_deref(),
+        device: args.device.as_deref(),
+    });
 
     log::debug!(
-        "matched {} device group(s) of {}",
-        groups.len(),
+        "matched {} of {} device group(s)",
+        filtered.groups().len(),
         index.groups().len()
     );
 
-    render::devices(&DeviceIndex::from(groups), args.output.format)
+    render::devices(&filtered, args.output.format)
 }

@@ -117,6 +117,11 @@ impl DeviceIndex {
         self.groups.iter().filter(move |group| query.matches(group))
     }
 
+    /// An index holding only the groups matching `query`.
+    pub fn filtered(&self, query: &DeviceQuery<'_>) -> Self {
+        Self::from(self.filter(query).cloned().collect::<Vec<_>>())
+    }
+
     pub fn to_json(&self) -> Result<String> {
         crate::to_json(&self.groups)
     }

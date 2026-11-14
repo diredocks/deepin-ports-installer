@@ -3,7 +3,7 @@
 //!
 //! The repository serves an Apache "fancy" directory index. The crawler walks
 //! `<base>/<date>/<arch>/` and turns every `deepin-*.{iso,tar.xz,tar.gz}` file
-//! into an [`Image`] record, mirroring `ref/update-image.js`.
+//! into an [`Image`] record.
 
 use std::path::Path;
 
@@ -42,17 +42,10 @@ const BASE: &str = "https://ci.deepin.com/repo/deepin/deepin-ports/cdimage";
 /// Default number of concurrent listing requests.
 pub const DEFAULT_CONCURRENCY: usize = 4;
 
-/// Settings for [`image_index`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Options {
-    /// Maximum number of concurrent HTTP requests.
-    pub concurrency: usize,
-}
-
 /// Crawl the image repository and build an image index.
-pub async fn image_index(options: &Options) -> Result<ImageIndex> {
+pub async fn image_index(concurrency: usize) -> Result<ImageIndex> {
     let base = BASE.trim_end_matches('/');
-    let concurrency = options.concurrency.max(1);
+    let concurrency = concurrency.max(1);
 
     let dates: Vec<String> = parse_index(&fetch::http::get(&format!("{base}/")).await?)?
         .into_iter()

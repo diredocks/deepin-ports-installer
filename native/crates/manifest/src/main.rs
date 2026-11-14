@@ -4,35 +4,21 @@
 //! the image repository is not something end users do, and keeping the crawler
 //! (and its dependencies) out of the installer keeps the shipped CLI small.
 
+mod crawl;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-mod crawl;
-
-use clap::{Args, Parser, Subcommand};
-use crawl::Options;
+use clap::Parser;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "deepin-ports-manifest",
     version,
-    about = "Regenerate the manifests bundled into the Deepin Ports installer",
-    arg_required_else_help = true
+    about = "Regenerate the images.toml manifest bundled into the Deepin Ports installer"
 )]
 struct Cli {
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Debug, Subcommand)]
-enum Command {
-    /// Crawl the image repository and write an `images.toml` manifest
-    Generate(GenerateArgs),
-}
-
-#[derive(Debug, Args)]
-struct GenerateArgs {
     /// Write the manifest to this file instead of standard output
     #[arg(short, long, value_name = "PATH")]
     output: Option<PathBuf>,
@@ -55,22 +41,12 @@ fn main() -> ExitCode {
 fn run() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Command::Generate(args) => generate_manifest(args),
-    }
-}
-
-fn generate_manifest(args: GenerateArgs) -> Result<()> {
-    let options = Options {
-        concurrency: args.concurrency,
-    };
-
     let index = tokio::runtime::Runtime::new()
         .context("failed to start async runtime")?
-        .block_on(crawl::image_index(&options))
+        .block_on(crawl::image_index(cli.concurrency))
         .context("failed to generate image index")?;
 
-    match &args.output {
+    match &cli.output {
         Some(path) => {
             crawl::write_file(&index, path)?;
             eprintln!(

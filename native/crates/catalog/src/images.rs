@@ -188,6 +188,11 @@ impl ImageIndex {
         newest.into_values().cloned().collect()
     }
 
+    /// An index holding only the images matching `query`.
+    pub fn filtered(&self, query: &ImageQuery<'_>) -> Self {
+        Self::from(self.filter(query))
+    }
+
     /// The `(arch, device)` pair `query` refers to, or an error when no or
     /// several devices match.
     fn select_device<'a>(

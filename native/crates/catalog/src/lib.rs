@@ -38,7 +38,7 @@ pub enum Error {
     },
 
     /// A device matched more than one image group.
-    #[error("device `{device}` matches multiple image groups; narrow it with `--arch`: {}", format_candidates(.candidates))]
+    #[error("device `{device}` matches multiple image groups; specify the architecture: {}", format_candidates(.candidates))]
     Ambiguous {
         /// Requested device model or image-group slug.
         device: String,
