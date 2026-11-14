@@ -26,10 +26,6 @@ pub struct DeviceGroup {
     pub links: Vec<String>,
 
     /// Write methods these devices accept, in preference order.
-    ///
-    /// The same board can need a different method per medium: eic7700 writes
-    /// SD cards and SATA/NVMe drives through partitions but its eMMC through
-    /// fastboot.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub flash_via: Vec<FlashVia>,
 }
@@ -44,23 +40,18 @@ impl DeviceGroup {
 
 /// Criteria used to pick device groups out of a [`DeviceIndex`].
 ///
-/// Every field is optional; an unset field matches everything. Text fields are
-/// matched case-insensitively as substrings, so `vision` matches
-/// `visionfive-2`.
+/// Every field is optional; text fields are matched case-insensitively as
+/// substrings, so `vision` matches `visionfive-2`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DeviceQuery<'a> {
-    /// Only match this architecture.
     pub arch: Option<Arch>,
 
-    /// Only match groups whose SoC contains this text, e.g. `jh7110`.
     pub soc: Option<&'a str>,
 
-    /// Only match groups covering a device model containing this text.
     pub device: Option<&'a str>,
 }
 
 impl DeviceQuery<'_> {
-    /// Whether `group` satisfies every set field.
     pub fn matches(&self, group: &DeviceGroup) -> bool {
         self.arch.is_none_or(|arch| group.arch == arch)
             && self
@@ -75,14 +66,12 @@ impl DeviceQuery<'_> {
     }
 }
 
-/// The top-level shape of `devices.toml`.
 #[derive(Debug, Deserialize)]
 struct DevicesFile {
     #[serde(default)]
     devices: Vec<DeviceGroup>,
 }
 
-/// The `devices.toml` bundled into the binary at compile time.
 const EMBEDDED_DEVICES: &str = include_str!("../assets/devices.toml");
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -120,12 +109,10 @@ impl DeviceIndex {
         })
     }
 
-    /// The groups matching `query`, in index order.
     pub fn filter(&self, query: &DeviceQuery<'_>) -> impl Iterator<Item = &DeviceGroup> {
         self.groups.iter().filter(move |group| query.matches(group))
     }
 
-    /// An index holding only the groups matching `query`.
     pub fn filtered(&self, query: &DeviceQuery<'_>) -> Self {
         Self::from(self.filter(query).cloned().collect::<Vec<_>>())
     }

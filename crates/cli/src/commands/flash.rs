@@ -86,10 +86,8 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
-    // TODO(privileged): writing a device needs root, so it goes through the
-    // sidecar: launch `sidecar_client::Client`, build the job with `flash::job`
-    // from the prepared artifacts and the `flash_via` method the device group
-    // lists, and stream the helper's progress onto the bar.
+    // TODO(privileged): launch the sidecar, build the job with `flash::job`, stream
+    // its progress.
     todo!(
         "writing images to block devices is not implemented yet; the artifacts are prepared in {}",
         prepared.directory.display()

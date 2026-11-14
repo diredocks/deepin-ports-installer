@@ -83,8 +83,7 @@ impl Client {
             {
                 Reply::Ok { output } => Ok(output),
                 Reply::Error { message } => Err(Error::Reported(message)),
-                // `id` never reports progress; skip the frame instead of
-                // failing a request that the helper is still answering.
+                // `id` never reports progress; skip the frame.
                 Reply::Progress { .. } => continue,
             };
         }
@@ -97,12 +96,7 @@ impl Client {
 
     /// Run a flash job through the helper, reporting its progress.
     ///
-    /// This is the only operation that writes a device. `progress` is called for
-    /// every report the helper streams; the call returns once the job ended — or
-    /// failed, including when the helper refused the plan.
-    ///
-    /// TODO(flash): send `Request::Flash`, then read replies until one is not
-    /// `Reply::Progress`, mapping those frames onto `progress`.
+    /// TODO(flash): send `Request::Flash` and map progress frames onto `progress`.
     pub fn flash<F>(&mut self, _plan: &FlashPlan, _progress: F) -> Result<()>
     where
         F: FnMut(Amount),

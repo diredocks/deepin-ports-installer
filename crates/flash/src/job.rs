@@ -1,10 +1,4 @@
 //! Turning prepared artifacts into the job the privileged helper runs.
-//!
-//! Nothing here touches a block device: writing needs root, so the artifacts and
-//! the write method of the device group are packed into a
-//! [`FlashPlan`] and handed to the helper through `sidecar_client`. The helper
-//! re-checks the plan before writing, so this module decides *what* to ask for,
-//! never *how* to write it.
 
 use std::path::Path;
 
@@ -15,11 +9,7 @@ use crate::{Error, Prepared, Result};
 
 /// The job that writes `prepared` to `target` on the devices of `group`.
 ///
-/// `via` is one of the methods the device group lists in `flash_via`; a frontend
-/// lets the user choose when a device supports several (eMMC through fastboot,
-/// SD cards through partitions). Asking for a method the configuration never
-/// mentions is a bug in the frontend, not a plan worth executing, and is refused
-/// with [`Error::UnsupportedFlashVia`].
+/// `via` must be one the group lists in `flash_via`.
 pub fn job(
     prepared: &Prepared,
     group: &DeviceGroup,

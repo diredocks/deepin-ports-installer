@@ -10,10 +10,8 @@ use crate::{Arch, DeviceIndex, Error, Result, date};
 /// An image group that matched a [`Query`] but needs disambiguation.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Candidate {
-    /// Architecture of the matching group.
     pub arch: Arch,
 
-    /// Device/SoC slug of the matching group.
     pub device: String,
 }
 
@@ -43,10 +41,8 @@ pub struct Query<'a> {
 /// A single downloadable image entry, i.e. one `[[images]]` record.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Image {
-    /// Architecture, e.g. `riscv`.
     pub arch: Arch,
 
-    /// Device/SoC slug, e.g. `jh7110`.
     pub device: String,
 
     /// Release variant, e.g. `25-crimson-preview`.
@@ -62,17 +58,14 @@ pub struct Image {
 
 /// Criteria used to pick images out of an [`ImageIndex`].
 ///
-/// Every field is optional; an unset field matches everything. Text fields are
-/// matched case-insensitively as substrings, like [`Query`].
+/// Every field is optional; text fields are matched case-insensitively as
+/// substrings, like [`Query`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImageQuery<'a> {
-    /// Only match this architecture.
     pub arch: Option<Arch>,
 
-    /// Only match images whose device slug contains this text.
     pub device: Option<&'a str>,
 
-    /// Only match variants containing this text, e.g. `25-crimson`.
     pub variant: Option<&'a str>,
 
     /// Only match builds published on this day (`YYYYMMDD` or `YYYY-MM-DD`).
@@ -83,7 +76,6 @@ pub struct ImageQuery<'a> {
 }
 
 impl ImageQuery<'_> {
-    /// Whether `image` satisfies every set field.
     fn matches(&self, image: &Image) -> bool {
         self.arch.is_none_or(|arch| image.arch == arch)
             && self
@@ -98,10 +90,8 @@ impl ImageQuery<'_> {
     }
 }
 
-/// The `images.toml` bundled into the binary at compile time.
 const EMBEDDED_IMAGES: &str = include_str!("../assets/images.toml");
 
-/// The top-level shape of `images.toml`.
 #[derive(Debug, Deserialize)]
 struct ImagesFile {
     #[serde(default)]
@@ -116,10 +106,6 @@ pub struct ImageIndex {
 
 impl ImageIndex {
     /// Parse an `images.toml` document.
-    ///
-    /// The document is a flat list of `[[images]]` records; the index keeps
-    /// them sorted by architecture, device and date, so the images of a device
-    /// are adjacent and ordered chronologically.
     pub fn parse(document: &str) -> Result<Self> {
         let file: ImagesFile = toml::from_str(document)?;
         Ok(Self::from(file.images))
@@ -139,10 +125,8 @@ impl ImageIndex {
 
     /// Resolve the newest image matching `query`.
     ///
-    /// The device must match an image's device slug exactly, or be a known
-    /// device model that maps to that image's architecture and SoC. More than
-    /// one match is an error; use `query.arch` (or a more specific device) to
-    /// disambiguate.
+    /// The device must match an image's device slug, or be a known device model
+    /// that maps to it; more than one match is an error.
     pub fn resolve(&self, devices: &DeviceIndex, query: &Query<'_>) -> Result<Image> {
         let (arch, device) = self.select_device(devices, query)?;
 
@@ -188,13 +172,10 @@ impl ImageIndex {
         newest.into_values().cloned().collect()
     }
 
-    /// An index holding only the images matching `query`.
     pub fn filtered(&self, query: &ImageQuery<'_>) -> Self {
         Self::from(self.filter(query))
     }
 
-    /// The `(arch, device)` pair `query` refers to, or an error when no or
-    /// several devices match.
     fn select_device<'a>(
         &'a self,
         devices: &DeviceIndex,
@@ -233,8 +214,7 @@ impl ImageIndex {
         crate::to_json(&self.images)
     }
 
-    /// Serialize the images back into the canonical flat `[[images]]` layout
-    /// used by `images.toml`.
+    /// Serialize the images back into the canonical flat `[[images]]` layout.
     pub fn to_toml(&self) -> Result<String> {
         #[derive(Serialize)]
         struct Document<'a> {
@@ -248,8 +228,8 @@ impl ImageIndex {
 }
 
 impl From<Vec<Image>> for ImageIndex {
-    /// Images are sorted by architecture, device and date, so each device's
-    /// images are adjacent and the newest image is always last.
+    /// Sorted by architecture, device and date, so the newest image of a device is
+    /// always last.
     fn from(mut images: Vec<Image>) -> Self {
         images.sort_by(|a, b| (&a.arch, &a.device, &a.date).cmp(&(&b.arch, &b.device, &b.date)));
         Self { images }

@@ -3,8 +3,7 @@
 //! The sidecar runs as root (through the platform elevation mechanism: `pkexec`
 //! on Linux). It binds a loopback WebSocket, announces its address and a per-run
 //! token on stdout, and serves the closed set of operations in
-//! [`sidecar_protocol::Request`]. It never interprets client-provided paths or
-//! command lines.
+//! [`sidecar_protocol::Request`].
 
 use std::io::{self, Write};
 use std::net::Ipv4Addr;
@@ -128,21 +127,11 @@ async fn handle_request(socket: &mut WebSocketStream<TcpStream>, text: &str) -> 
 
 /// Run a flash job, streaming its progress to the client.
 ///
-/// The job ends with exactly one `Reply::Ok` or `Reply::Error`.
-///
-/// TODO(flash): the drivers report progress through a synchronous callback while
-/// this task owns the socket, so the implementation has to forward those reports
-/// — through a channel plus a task that writes the frames — instead of awaiting
-/// inside the callback. Keeping the driver synchronous also keeps it testable
-/// without a runtime.
+/// TODO(flash): forward the driver's synchronous reports through a channel, then
+/// reply with `Reply::Ok` or `Reply::Error`.
 async fn handle_flash(_socket: &mut WebSocketStream<TcpStream>, plan: &FlashPlan) -> Result<()> {
-    // TODO(progress): the driver reports through a synchronous callback while
-    // this task owns the socket, so the reports have to be forwarded through a
-    // channel and a task that writes the frames; a callback cannot await.
     driver::write(plan, &mut |_progress| {})?;
 
-    // TODO(flash): reply with `Reply::Ok` when the job finished, or `Reply::Error`
-    // when it failed, and keep serving until the client shuts the helper down.
     todo!("send the job's outcome back to the client")
 }
 

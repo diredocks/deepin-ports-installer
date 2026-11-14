@@ -18,12 +18,8 @@
 //! Extraction is the expensive step (several gigabytes), so [`prepare`] reuses a
 //! previous one unless asked to start over.
 //!
-//! Writing is the one thing this crate does not do. The installer runs
-//! unprivileged, so the artifacts go to the privileged helper as a
-//! [`FlashPlan`](sidecar_protocol::flash::FlashPlan) built by [`job`], and the
-//! helper — which links its own write drivers — re-checks the plan and writes it.
-//! The drivers are only scaffolded for now: they document their steps and end in
-//! `todo!()`.
+//! Writing goes to the privileged helper as a
+//! [`FlashPlan`](sidecar_protocol::flash::FlashPlan) built by [`job`].
 //!
 //! The crate is built for a long-lived frontend: it never prints, never
 //! initialises logging, never blocks on an async runtime, never touches the

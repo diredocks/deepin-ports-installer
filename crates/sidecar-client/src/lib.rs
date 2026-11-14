@@ -8,20 +8,8 @@
 //! shares only [`sidecar_protocol`] with this crate, so the root process does
 //! not link the client, the image model or anything else here.
 //!
-//! Writing a device is the operation that makes the helper necessary: an
-//! unprivileged frontend describes the job as a
-//! [`FlashPlan`](sidecar_protocol::flash::FlashPlan) and
-//! [`Client::flash`] streams the helper's progress back.
-//!
-//! # Security model
-//!
-//! The helper listens on a WebSocket bound to `127.0.0.1` and understands only
-//! the operations represented by `Request` messages: it never accepts a program
-//! name, shell string or path from the client. A local attacker who reaches the
-//! socket can only ask for those fixed operations, and must know the per-run
-//! token announced on the helper's stdout.
-//!
-//! Keep the protocol closed. Do not add a generic "run this command" operation.
+//! The operation the helper exists for is [`Client::flash`], which streams a
+//! device write's progress back.
 //!
 //! # Protocol
 //!

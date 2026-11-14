@@ -1,24 +1,17 @@
 //! Parsing, comparing and formatting of image build dates.
 //!
-//! Build dates are embedded in file names as `YYYYMMDD-HHMMSS`
-//! (e.g. `20250625-030117`). Filters may pass only the `YYYYMMDD` day, possibly
-//! with separators such as `2025-06-25`, so comparisons are made on the digits
-//! alone.
+//! Build dates are embedded in file names as `YYYYMMDD-HHMMSS`; filters may pass
+//! only the `YYYYMMDD` day, possibly with separators such as `2025-06-25`.
 
-/// Whether `token` is a plausible `YYYYMMDD` day, e.g. `20250625`.
 pub fn is_day(token: &str) -> bool {
     token.len() == 8 && token.starts_with("20") && token.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-/// Whether `token` is a `HHMMSS` time, e.g. `030117`.
 pub fn is_time(token: &str) -> bool {
     token.len() == 6 && token.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 /// The `YYYYMMDD-HHMMSS` timestamp embedded in a file `stem`, if any.
-///
-/// The stem is split on `-` and scanned for a day token immediately followed by
-/// a six-digit time token; trailing suffixes such as `_kernel-6.7` are ignored.
 pub fn from_stem(stem: &str) -> Option<String> {
     let tokens: Vec<&str> = stem.split('-').collect();
 
@@ -28,8 +21,7 @@ pub fn from_stem(stem: &str) -> Option<String> {
     })
 }
 
-/// Digits-only form used to compare dates regardless of separators
-/// (`2025-06-25` and `20250625` both become `20250625`).
+/// Digits-only form used to compare dates regardless of separators.
 fn digits(date: &str) -> String {
     date.bytes()
         .filter(|byte| byte.is_ascii_digit())
@@ -37,14 +29,11 @@ fn digits(date: &str) -> String {
         .collect()
 }
 
-/// Whether `date` falls on the day named by `day`, ignoring separators and any
-/// time component.
 pub fn is_on_day(date: &str, day: &str) -> bool {
     digits(date).starts_with(&digits(day))
 }
 
-/// Render `date` as `2025-06-25 03:01:17` when it holds a full timestamp,
-/// otherwise return it unchanged.
+/// Render `date` as `2025-06-25 03:01:17` when it holds a full timestamp.
 pub fn format(date: &str) -> String {
     let digits = digits(date);
     if digits.len() == 14 {

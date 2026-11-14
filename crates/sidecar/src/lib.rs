@@ -6,14 +6,11 @@
 //! operations in [`sidecar_protocol::Request`].
 //!
 //! Writing images is the reason the helper exists: a
-//! [`FlashPlan`](sidecar_protocol::flash::FlashPlan) is handed to one of the
-//! write drivers, one per `flash_via` method. The drivers are scaffolded only —
-//! they document their steps and end in `todo!()`.
+//! [`FlashPlan`](sidecar_protocol::flash::FlashPlan) goes to one of the write
+//! drivers, none of which is implemented yet.
 //!
-//! It deliberately links only [`sidecar_protocol`] and [`catalog`], which it
-//! needs to resolve a plan's device group: the download client, the archive
-//! handling and the unprivileged client of the protocol are kept out of the root
-//! process.
+//! It links only [`sidecar_protocol`] and [`catalog`]: the download client and the
+//! unprivileged client are kept out of the root process.
 
 mod driver;
 mod error;

@@ -1,9 +1,4 @@
-//! Resolving which image to flash.
-//!
-//! A flash source is either a local image file or a device model that the
-//! bundled index maps to an image. Where that image is written comes later, in
-//! [`job`](crate::job), once the artifacts are prepared and the device group is
-//! known.
+//! Resolving which image to flash: a local file or a device model from the index.
 
 use std::path::PathBuf;
 
@@ -47,10 +42,7 @@ impl SourceOptions<'_> {
     }
 }
 
-/// Resolve what `source` names.
-///
-/// `source` is treated as a local file when it contains a path separator or
-/// names an existing file, and as a device model otherwise.
+/// Resolve what `source` names: a local file, or a device model when it is no path.
 pub fn resolve(source: &str, options: &SourceOptions<'_>) -> Result<Source> {
     match local_path(source) {
         Some(path) => local(path, options),

@@ -4,11 +4,6 @@
 //! parses: no process spawning, no HTTP, no privileged code. Both frontends
 //! (the CLI and a future graphical installer) use it as their source of truth
 //! for architectures, devices, images and the artifacts an image unpacks into.
-//!
-//! The artifact model lives here rather than in the crate that detects files or
-//! the helper that writes them, because both sides must agree on it: the
-//! unprivileged side recognises an [`Artifact`] by name, and the plan it sends to
-//! the privileged helper carries the same value.
 
 pub mod arch;
 pub mod artifact;
@@ -39,10 +34,8 @@ pub enum Error {
         /// Requested device model or image-group slug.
         device: String,
 
-        /// Requested variant filter, if any.
         variant: Option<String>,
 
-        /// Requested publication date, if any.
         date: Option<String>,
     },
 
@@ -52,7 +45,6 @@ pub enum Error {
         /// Requested device model or image-group slug.
         device: String,
 
-        /// Matched groups, each with its architecture and device slug.
         candidates: Vec<Candidate>,
     },
 
@@ -73,10 +65,8 @@ pub enum Error {
     UnknownArch(String),
 }
 
-/// Convenience alias used across this crate.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Render ambiguous candidates as `<arch>/<device>` for error messages.
 fn format_candidates(candidates: &[Candidate]) -> String {
     candidates
         .iter()
@@ -85,13 +75,11 @@ fn format_candidates(candidates: &[Candidate]) -> String {
         .join(", ")
 }
 
-/// Serialize a device list or image list as pretty JSON, the format shared by
-/// every index.
+/// Serialize a device list or image list as pretty JSON.
 pub(crate) fn to_json<T: serde::Serialize + ?Sized>(groups: &T) -> Result<String> {
     Ok(serde_json::to_string_pretty(groups)?)
 }
 
-/// Read a TOML index document from `path`, shared by both `parse_file`s.
 pub(crate) fn read_document(path: &Path) -> Result<String> {
     fsx::read_to_string(path).map_err(Error::from)
 }

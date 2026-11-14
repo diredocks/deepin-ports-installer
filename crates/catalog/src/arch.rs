@@ -15,7 +15,6 @@ pub enum Arch {
 }
 
 impl Arch {
-    /// The TOML slug of this architecture, e.g. `riscv`.
     pub const fn as_str(self) -> &'static str {
         match self {
             Arch::Riscv => "riscv",

@@ -4,10 +4,8 @@
 //! closed on purpose: unknown commands fail to deserialize instead of being
 //! forwarded to a shell or to the operating system.
 //!
-//! Everything here is wire format only. The values that travel on the wire come
-//! from the crates that own them — [`catalog`] for the device, image and artifact
-//! model, [`fsx::Amount`] for progress — so a plan means the same thing on both
-//! sides of the socket without a second copy of those types.
+//! The values on the wire come from the crates that own them ([`catalog`],
+//! [`fsx::Amount`]), so both sides agree without a second copy.
 
 use fsx::Amount;
 use serde::{Deserialize, Serialize};
@@ -25,12 +23,8 @@ pub enum Request {
     /// Placeholder privileged operation: run the platform probe (`id`).
     Id,
 
-    /// Write the artifacts of `plan` to its target.
-    ///
-    /// This is the only operation that can destroy data, and it is still an
-    /// operation, not a command: the plan cannot name a program, a shell string
-    /// or a layout, and the helper re-checks it against its own device index
-    /// before a byte is written.
+    /// Write the artifacts of `plan` to its target: the only operation that can
+    /// destroy data.
     Flash {
         /// Job to execute.
         plan: FlashPlan,
@@ -42,9 +36,8 @@ pub enum Request {
 
 /// The helper's reply to a [`Request`].
 ///
-/// A flash job produces zero or more [`Reply::Progress`] frames followed by
-/// exactly one [`Reply::Ok`] or [`Reply::Error`]; the other operations reply
-/// once.
+/// A flash job replies with zero or more [`Reply::Progress`] frames, then exactly
+/// one [`Reply::Ok`] or [`Reply::Error`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Reply {

@@ -1,7 +1,4 @@
 //! Progress reported while preparing an image, and while the helper writes it.
-//!
-//! Byte counts are the shared [`Amount`], so extraction, verification and the
-//! write reports the helper streams back are rendered the same way.
 
 use fsx::Amount;
 
@@ -15,10 +12,6 @@ pub enum Phase {
     Verify,
 
     /// Writing the artifacts to the target.
-    ///
-    /// This phase belongs to the privileged helper: the reports arrive as
-    /// [`Amount`] values over the sidecar protocol and are wrapped here so a
-    /// frontend renders them like its own phases.
     Write,
 }
 
