@@ -1,5 +1,5 @@
 {
-  description = "native backend for deepin (ports) installer";
+  description = "deepin (ports) installer";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
