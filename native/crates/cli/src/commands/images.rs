@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use catalog::{ImageFilter, ImageIndex, ImageQuery};
+use catalog::{ImageIndex, ImageQuery};
 
 use crate::cli::{FormatArg, ImageFilterArgs};
 use crate::render;
@@ -26,21 +26,19 @@ pub struct ImagesArgs {
 pub fn run(args: ImagesArgs) -> Result<()> {
     let index = ImageIndex::embedded().context("failed to load embedded image index")?;
 
-    let groups = index.filter(&ImageQuery {
+    let images = index.filter(&ImageQuery {
         arch: args.filters.arch,
         device: args.device.as_deref(),
-        filter: ImageFilter {
-            variant: args.filters.variant.as_deref(),
-            date: args.filters.date.as_deref(),
-            latest: args.latest,
-        },
+        variant: args.filters.variant.as_deref(),
+        date: args.filters.date.as_deref(),
+        latest: args.latest,
     });
 
     log::debug!(
-        "matched {} image group(s) of {}",
-        groups.len(),
-        index.groups().len()
+        "matched {} of {} image(s)",
+        images.len(),
+        index.images().len()
     );
 
-    render::images(&ImageIndex::from(groups), args.output.format)
+    render::images(&ImageIndex::from(images), args.output.format)
 }

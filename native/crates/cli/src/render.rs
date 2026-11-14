@@ -1,7 +1,7 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
-use catalog::{DeviceGroup, DeviceIndex, ImageGroup, ImageIndex};
+use catalog::{DeviceGroup, DeviceIndex, Image, ImageIndex};
 use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
 use drives::{Target, TargetList};
@@ -33,11 +33,7 @@ pub fn images(index: &ImageIndex, format: OutputFormat) -> Result<()> {
         OutputFormat::Json => print_document(&index.to_json()?),
         OutputFormat::Toml => print_document(&index.to_toml()?),
         OutputFormat::Table => {
-            let rows = index
-                .groups()
-                .iter()
-                .flat_map(image_rows)
-                .collect::<Vec<_>>();
+            let rows = index.images().iter().map(image_row).collect::<Vec<_>>();
             print_table(&["Arch", "Device", "Variant", "Date", "Size"], &rows);
             Ok(())
         }
@@ -78,16 +74,14 @@ fn device_row(group: &DeviceGroup) -> Vec<String> {
     ]
 }
 
-fn image_rows(group: &ImageGroup) -> impl Iterator<Item = Vec<String>> + '_ {
-    group.images.iter().map(move |image| {
-        vec![
-            group.arch.to_string(),
-            group.device.clone(),
-            image.variant.clone(),
-            image.date.clone(),
-            format_size(image.size, BINARY.decimal_places(1)),
-        ]
-    })
+fn image_row(image: &Image) -> Vec<String> {
+    vec![
+        image.arch.to_string(),
+        image.device.clone(),
+        image.variant.clone(),
+        image.date.clone(),
+        format_size(image.size, BINARY.decimal_places(1)),
+    ]
 }
 
 fn target_row(target: &Target) -> Vec<String> {

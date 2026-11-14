@@ -26,7 +26,7 @@ impl fmt::Display for Candidate {
 /// Criteria used to pick an image out of an [`ImageIndex`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query<'a> {
-    /// Device model or image-group slug, e.g. `visionfive-2` or `jh7110`.
+    /// Device model or image device slug, e.g. `visionfive-2` or `jh7110`.
     pub device: &'a str,
 
     /// Architecture filter, needed when a device exists on several of them.
@@ -40,9 +40,15 @@ pub struct Query<'a> {
     pub date: Option<&'a str>,
 }
 
-/// A single downloadable image entry, e.g. one `[[<arch>.<device>]]` table.
+/// A single downloadable image entry, i.e. one `[[images]]` record.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Image {
+    /// Architecture, e.g. `riscv`.
+    pub arch: Arch,
+
+    /// Device/SoC slug, e.g. `jh7110`.
+    pub device: String,
+
     /// Release variant, e.g. `25-crimson-preview`.
     pub variant: String,
 
@@ -54,138 +60,69 @@ pub struct Image {
     pub link: String,
 }
 
-/// All images available for one device under a specific architecture.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ImageGroup {
-    /// Architecture, e.g. `riscv`.
-    pub arch: Arch,
-
-    /// Device/SoC slug, e.g. `jh7110`.
-    pub device: String,
-
-    /// Images for this device, sorted by `date` ascending.
-    pub images: Vec<Image>,
-}
-
-impl ImageGroup {
-    /// Images are sorted by date, so the last match is the newest.
-    fn select_image(&self, query: &Query<'_>) -> Result<Image> {
-        self.images
-            .iter()
-            .rfind(|image| {
-                query
-                    .variant
-                    .is_none_or(|variant| contains_ignore_case(&image.variant, variant))
-                    && query
-                        .date
-                        .is_none_or(|day| date::is_on_day(&image.date, day))
-            })
-            .cloned()
-            .ok_or_else(|| no_image(query))
-    }
-
-    /// A copy of this group with only the images matching `filter`; `None` when
-    /// no image matches.
-    pub fn filter(&self, filter: &ImageFilter<'_>) -> Option<ImageGroup> {
-        let mut images: Vec<Image> = self
-            .images
-            .iter()
-            .filter(|image| filter.matches(image))
-            .cloned()
-            .collect();
-
-        if images.is_empty() {
-            return None;
-        }
-
-        if filter.latest {
-            let newest = images
-                .iter()
-                .map(|image| image.date.as_str())
-                .max()
-                .unwrap_or_default()
-                .to_owned();
-            images.retain(|image| image.date == newest);
-        }
-
-        Some(ImageGroup {
-            arch: self.arch,
-            device: self.device.clone(),
-            images,
-        })
-    }
-}
-
-/// Criteria used to keep the images of a group.
+/// Criteria used to pick images out of an [`ImageIndex`].
 ///
-/// Text fields are matched case-insensitively as substrings, like
-/// [`Query`].
+/// Every field is optional; an unset field matches everything. Text fields are
+/// matched case-insensitively as substrings, like [`Query`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct ImageFilter<'a> {
-    /// Variant substring filter, e.g. `25-crimson`.
+pub struct ImageQuery<'a> {
+    /// Only match this architecture.
+    pub arch: Option<Arch>,
+
+    /// Only match images whose device slug contains this text.
+    pub device: Option<&'a str>,
+
+    /// Only match variants containing this text, e.g. `25-crimson`.
     pub variant: Option<&'a str>,
 
-    /// Publication date (`YYYYMMDD` or `YYYY-MM-DD`) to keep.
+    /// Only match builds published on this day (`YYYYMMDD` or `YYYY-MM-DD`).
     pub date: Option<&'a str>,
 
-    /// Keep only the newest remaining image of the group.
+    /// Keep only the newest matching image of each device.
     pub latest: bool,
 }
 
-impl ImageFilter<'_> {
+impl ImageQuery<'_> {
     /// Whether `image` satisfies every set field.
-    pub fn matches(&self, image: &Image) -> bool {
-        self.variant
-            .is_none_or(|variant| contains_ignore_case(&image.variant, variant))
+    fn matches(&self, image: &Image) -> bool {
+        self.arch.is_none_or(|arch| image.arch == arch)
+            && self
+                .device
+                .is_none_or(|device| contains_ignore_case(&image.device, device))
+            && self
+                .variant
+                .is_none_or(|variant| contains_ignore_case(&image.variant, variant))
             && self
                 .date
                 .is_none_or(|day| date::is_on_day(&image.date, day))
     }
 }
 
-/// Criteria used to pick image groups out of an [`ImageIndex`].
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct ImageQuery<'a> {
-    /// Only match this architecture.
-    pub arch: Option<Arch>,
-
-    /// Only match groups whose device slug contains this text.
-    pub device: Option<&'a str>,
-
-    /// Which images of each group to keep.
-    pub filter: ImageFilter<'a>,
-}
-
 /// The `images.toml` bundled into the binary at compile time.
 const EMBEDDED_IMAGES: &str = include_str!("../assets/images.toml");
 
+/// The top-level shape of `images.toml`.
+#[derive(Debug, Deserialize)]
+struct ImagesFile {
+    #[serde(default)]
+    images: Vec<Image>,
+}
+
+/// Every image published for the supported architectures.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImageIndex {
-    groups: Vec<ImageGroup>,
+    images: Vec<Image>,
 }
 
 impl ImageIndex {
     /// Parse an `images.toml` document.
     ///
-    /// The document is a two-level map, `[[<arch>.<device>]]`, that cannot be
-    /// expressed as a plain struct. It is decoded into nested maps and then
-    /// flattened into groups; the resulting order is sorted (by architecture,
-    /// then device) rather than the order the groups appear in the file.
+    /// The document is a flat list of `[[images]]` records; the index keeps
+    /// them sorted by architecture, device and date, so the images of a device
+    /// are adjacent and ordered chronologically.
     pub fn parse(document: &str) -> Result<Self> {
-        let parsed: BTreeMap<Arch, BTreeMap<String, Vec<Image>>> = toml::from_str(document)?;
-
-        let groups: Vec<ImageGroup> = parsed
-            .into_iter()
-            .flat_map(|(arch, devices)| {
-                devices.into_iter().map(move |(device, images)| ImageGroup {
-                    arch,
-                    device,
-                    images,
-                })
-            })
-            .collect();
-
-        Ok(Self::from(groups))
+        let file: ImagesFile = toml::from_str(document)?;
+        Ok(Self::from(file.images))
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
@@ -196,60 +133,91 @@ impl ImageIndex {
         Self::parse(EMBEDDED_IMAGES)
     }
 
-    pub fn groups(&self) -> &[ImageGroup] {
-        &self.groups
+    pub fn images(&self) -> &[Image] {
+        &self.images
     }
 
     /// Resolve the newest image matching `query`.
     ///
-    /// The device must match an image-group slug exactly, or be a known device
-    /// model that maps to that group's architecture and SoC. More than one
-    /// match is an error; use `query.arch` (or a more specific device) to
+    /// The device must match an image's device slug exactly, or be a known
+    /// device model that maps to that image's architecture and SoC. More than
+    /// one match is an error; use `query.arch` (or a more specific device) to
     /// disambiguate.
     pub fn resolve(&self, devices: &DeviceIndex, query: &Query<'_>) -> Result<Image> {
-        self.select_group(devices, query)?.select_image(query)
-    }
+        let (arch, device) = self.select_device(devices, query)?;
 
-    /// The groups matching `query`, with their images filtered by
-    /// [`ImageQuery::filter`]. Groups left without images are dropped.
-    pub fn filter(&self, query: &ImageQuery<'_>) -> Vec<ImageGroup> {
-        self.groups
+        self.images
             .iter()
-            .filter(|group| query.arch.is_none_or(|arch| group.arch == arch))
-            .filter(|group| {
-                query
-                    .device
-                    .is_none_or(|device| contains_ignore_case(&group.device, device))
+            .rev()
+            .find(|image| {
+                image.arch == arch
+                    && image.device == device
+                    && query
+                        .variant
+                        .is_none_or(|variant| contains_ignore_case(&image.variant, variant))
+                    && query
+                        .date
+                        .is_none_or(|day| date::is_on_day(&image.date, day))
             })
-            .filter_map(|group| group.filter(&query.filter))
-            .collect()
+            .cloned()
+            .ok_or_else(|| no_image(query))
     }
 
-    fn select_group<'a>(
+    /// The images matching `query`, newest last, with `query.latest` applied.
+    pub fn filter(&self, query: &ImageQuery<'_>) -> Vec<Image> {
+        let matched = || self.images.iter().filter(|image| query.matches(image));
+
+        if !query.latest {
+            return matched().cloned().collect();
+        }
+
+        // Images are sorted by date within a device, so the newest match of a
+        // device is its last one.
+        let mut newest: BTreeMap<(Arch, &str), &Image> = BTreeMap::new();
+        for image in matched() {
+            newest
+                .entry((image.arch, image.device.as_str()))
+                .and_modify(|current| {
+                    if image.date > current.date {
+                        *current = image;
+                    }
+                })
+                .or_insert(image);
+        }
+
+        newest.into_values().cloned().collect()
+    }
+
+    /// The `(arch, device)` pair `query` refers to, or an error when no or
+    /// several devices match.
+    fn select_device<'a>(
         &'a self,
         devices: &DeviceIndex,
         query: &Query<'_>,
-    ) -> Result<&'a ImageGroup> {
-        let groups: Vec<&ImageGroup> = self
-            .groups
-            .iter()
-            .filter(|group| query.arch.is_none_or(|arch| group.arch == arch))
-            .filter(|group| {
-                group.device.eq_ignore_ascii_case(query.device)
-                    || devices.maps_to(query.device, group.arch, &group.device)
-            })
-            .collect();
+    ) -> Result<(Arch, &'a str)> {
+        let mut groups: Vec<(Arch, &str)> = Vec::new();
+        for image in &self.images {
+            if query.arch.is_some_and(|arch| arch != image.arch) {
+                continue;
+            }
+
+            let matches = image.device.eq_ignore_ascii_case(query.device)
+                || devices.maps_to(query.device, image.arch, &image.device);
+            if matches && groups.last() != Some(&(image.arch, image.device.as_str())) {
+                groups.push((image.arch, image.device.as_str()));
+            }
+        }
 
         match groups.as_slice() {
             [] => Err(no_image(query)),
-            [group] => Ok(group),
+            [device] => Ok(*device),
             _ => Err(Error::Ambiguous {
                 device: query.device.to_owned(),
                 candidates: groups
                     .iter()
-                    .map(|group| Candidate {
-                        arch: group.arch,
-                        device: group.device.clone(),
+                    .map(|(arch, device)| Candidate {
+                        arch: *arch,
+                        device: (*device).to_owned(),
                     })
                     .collect(),
             }),
@@ -257,44 +225,29 @@ impl ImageIndex {
     }
 
     pub fn to_json(&self) -> Result<String> {
-        crate::to_json(&self.groups)
+        crate::to_json(&self.images)
     }
 
-    /// Serialize the image groups back into the canonical
-    /// `[[<arch>.<device>]]` layout used by `images.toml`.
+    /// Serialize the images back into the canonical flat `[[images]]` layout
+    /// used by `images.toml`.
     pub fn to_toml(&self) -> Result<String> {
-        let mut root = toml::value::Table::new();
-
-        for group in &self.groups {
-            let arch = root
-                .entry(group.arch.as_str().to_owned())
-                .or_insert_with(|| toml::Value::Table(toml::value::Table::new()));
-
-            let arch_table = arch
-                .as_table_mut()
-                .expect("architecture entry is always a table");
-
-            let images: Vec<toml::Value> = group
-                .images
-                .iter()
-                .map(toml::Value::try_from)
-                .collect::<std::result::Result<_, toml::ser::Error>>()?;
-
-            arch_table.insert(group.device.clone(), toml::Value::Array(images));
+        #[derive(Serialize)]
+        struct Document<'a> {
+            images: &'a [Image],
         }
 
-        Ok(toml::to_string_pretty(&root)?)
+        Ok(toml::to_string_pretty(&Document {
+            images: &self.images,
+        })?)
     }
 }
 
-impl From<Vec<ImageGroup>> for ImageIndex {
-    /// Groups are kept as given; each group's images are sorted by `date` so
-    /// the newest image is always last.
-    fn from(mut groups: Vec<ImageGroup>) -> Self {
-        for group in &mut groups {
-            group.images.sort_by(|a, b| a.date.cmp(&b.date));
-        }
-        Self { groups }
+impl From<Vec<Image>> for ImageIndex {
+    /// Images are sorted by architecture, device and date, so each device's
+    /// images are adjacent and the newest image is always last.
+    fn from(mut images: Vec<Image>) -> Self {
+        images.sort_by(|a, b| (&a.arch, &a.device, &a.date).cmp(&(&b.arch, &b.device, &b.date)));
+        Self { images }
     }
 }
 
@@ -312,25 +265,33 @@ mod tests {
     use crate::DeviceGroup;
 
     const SAMPLE: &str = r#"
-        [[riscv.dp1000]]
+        [[images]]
+        arch = "riscv"
+        device = "dp1000"
         variant = "25-crimson-preview"
         size = 3908305680
         date = "20250625-030117"
         link = "https://example.com/dp1000.tar.xz"
 
-        [[riscv.jh7110]]
+        [[images]]
+        arch = "riscv"
+        device = "jh7110"
         variant = "23-beige-preview"
         size = 3010718680
         date = "20240805-110418"
         link = "https://example.com/jh7110-1.tar.xz"
 
-        [[riscv.jh7110]]
+        [[images]]
+        arch = "riscv"
+        device = "jh7110"
         variant = "25-crimson-preview"
         size = 3652822392
         date = "20250603-113217"
         link = "https://example.com/jh7110-2.tar.xz"
 
-        [[arm64.generic]]
+        [[images]]
+        arch = "arm64"
+        device = "generic"
         variant = "25-crimson-immutable"
         size = 5521922048
         date = "20260805-185035"
@@ -338,30 +299,64 @@ mod tests {
     "#;
 
     #[test]
-    fn parses_groups_in_sorted_order() {
+    fn parses_images_in_sorted_order() {
         let index = ImageIndex::parse(SAMPLE).unwrap();
-        assert_eq!(index.groups().len(), 3);
+        assert_eq!(index.images().len(), 4);
 
-        let groups: Vec<(&str, &str)> = index
-            .groups()
+        let devices: Vec<(Arch, &str)> = index
+            .images()
             .iter()
-            .map(|g| (g.arch.as_str(), g.device.as_str()))
+            .map(|image| (image.arch, image.device.as_str()))
             .collect();
         assert_eq!(
-            groups,
+            devices,
             [
-                ("riscv", "dp1000"),
-                ("riscv", "jh7110"),
-                ("arm64", "generic")
+                (Arch::Riscv, "dp1000"),
+                (Arch::Riscv, "jh7110"),
+                (Arch::Riscv, "jh7110"),
+                (Arch::Arm64, "generic"),
             ]
         );
 
-        let jh7110 = &index.groups()[1];
-        assert_eq!(jh7110.images.len(), 2);
-        assert_eq!(jh7110.images[0].variant, "23-beige-preview");
-        assert_eq!(jh7110.images[0].size, 3010718680);
-        assert_eq!(jh7110.images[0].date, "20240805-110418");
-        assert_eq!(jh7110.images[1].variant, "25-crimson-preview");
+        let jh7110 = &index.images()[1];
+        assert_eq!(jh7110.variant, "23-beige-preview");
+        assert_eq!(jh7110.size, 3010718680);
+        assert_eq!(jh7110.date, "20240805-110418");
+        assert_eq!(index.images()[2].variant, "25-crimson-preview");
+    }
+
+    #[test]
+    fn sorts_images_by_device_then_date() {
+        let index = ImageIndex::from(vec![
+            image(
+                Arch::Riscv,
+                "k1",
+                "25-crimson-preview",
+                "20250101-000000",
+                "https://e/new",
+            ),
+            image(
+                Arch::Arm64,
+                "k1",
+                "25-crimson-preview",
+                "20240101-000000",
+                "https://e/arm",
+            ),
+            image(
+                Arch::Riscv,
+                "k1",
+                "23-beige-preview",
+                "20240101-000000",
+                "https://e/old",
+            ),
+        ]);
+
+        let links: Vec<&str> = index
+            .images()
+            .iter()
+            .map(|image| image.link.as_str())
+            .collect();
+        assert_eq!(links, ["https://e/old", "https://e/new", "https://e/arm"]);
     }
 
     #[test]
@@ -369,29 +364,19 @@ mod tests {
         let index = ImageIndex::parse(SAMPLE).unwrap();
         let rendered = index.to_toml().unwrap();
 
+        assert!(rendered.starts_with("[[images]]\narch = \"riscv\"\ndevice = "));
         assert_eq!(ImageIndex::parse(&rendered).unwrap(), index);
     }
 
-    fn image(variant: &str, date: &str, link: &str) -> Image {
+    fn image(arch: Arch, device: &str, variant: &str, date: &str, link: &str) -> Image {
         Image {
+            arch,
+            device: device.to_owned(),
             variant: variant.to_owned(),
             size: 1,
             date: date.to_owned(),
             link: link.to_owned(),
         }
-    }
-
-    fn images(groups: Vec<(Arch, &str, Vec<Image>)>) -> ImageIndex {
-        ImageIndex::from(
-            groups
-                .into_iter()
-                .map(|(arch, device, images)| ImageGroup {
-                    arch,
-                    device: device.to_owned(),
-                    images,
-                })
-                .collect::<Vec<_>>(),
-        )
     }
 
     fn model(arch: Arch, soc: &str, devices: &[&str]) -> DeviceIndex {
@@ -415,22 +400,22 @@ mod tests {
 
     #[test]
     fn resolves_device_model_through_soc() {
-        let index = images(vec![(
-            Arch::Riscv,
-            "k1",
-            vec![
-                image(
-                    "23-beige-preview",
-                    "20240101-000000",
-                    "https://e/old.tar.xz",
-                ),
-                image(
-                    "25-crimson-preview",
-                    "20250101-000000",
-                    "https://e/new.tar.xz",
-                ),
-            ],
-        )]);
+        let index = ImageIndex::from(vec![
+            image(
+                Arch::Riscv,
+                "k1",
+                "23-beige-preview",
+                "20240101-000000",
+                "https://e/old.tar.xz",
+            ),
+            image(
+                Arch::Riscv,
+                "k1",
+                "25-crimson-preview",
+                "20250101-000000",
+                "https://e/new.tar.xz",
+            ),
+        ]);
         let devices = model(Arch::Riscv, "k1", &["muse-pi"]);
 
         let resolved = index.resolve(&devices, &query("muse-pi")).unwrap();
@@ -439,16 +424,20 @@ mod tests {
 
     #[test]
     fn maps_model_across_architectures() {
-        let index = images(vec![
-            (
+        let index = ImageIndex::from(vec![
+            image(
                 Arch::Riscv,
                 "generic",
-                vec![image("v", "20240101-000000", "https://e/rv")],
+                "v",
+                "20240101-000000",
+                "https://e/rv",
             ),
-            (
+            image(
                 Arch::Arm64,
                 "generic",
-                vec![image("v", "20250101-000000", "https://e/arm")],
+                "v",
+                "20250101-000000",
+                "https://e/arm",
             ),
         ]);
         let devices = model(Arch::Arm64, "generic", &["qemu-arm"]);
@@ -458,11 +447,13 @@ mod tests {
     }
 
     #[test]
-    fn matches_group_slug_exactly() {
-        let index = images(vec![(
+    fn matches_device_slug_exactly() {
+        let index = ImageIndex::from(vec![image(
             Arch::Riscv,
             "visionfive2",
-            vec![image("v", "20240101-000000", "https://e/vf2")],
+            "v",
+            "20240101-000000",
+            "https://e/vf2",
         )]);
 
         let resolved = index
@@ -478,16 +469,20 @@ mod tests {
 
     #[test]
     fn narrows_ambiguous_match_with_arch() {
-        let index = images(vec![
-            (
+        let index = ImageIndex::from(vec![
+            image(
                 Arch::Riscv,
                 "generic",
-                vec![image("v", "20240101-000000", "https://e/rv")],
+                "v",
+                "20240101-000000",
+                "https://e/rv",
             ),
-            (
+            image(
                 Arch::Arm64,
                 "generic",
-                vec![image("v", "20250101-000000", "https://e/arm")],
+                "v",
+                "20250101-000000",
+                "https://e/arm",
             ),
         ]);
         let devices = DeviceIndex::default();
@@ -511,14 +506,22 @@ mod tests {
 
     #[test]
     fn filters_by_variant_and_date() {
-        let index = images(vec![(
-            Arch::Riscv,
-            "k1",
-            vec![
-                image("23-beige-preview", "20240101-000000", "https://e/beige"),
-                image("25-crimson-preview", "20250101-000000", "https://e/crimson"),
-            ],
-        )]);
+        let index = ImageIndex::from(vec![
+            image(
+                Arch::Riscv,
+                "k1",
+                "23-beige-preview",
+                "20240101-000000",
+                "https://e/beige",
+            ),
+            image(
+                Arch::Riscv,
+                "k1",
+                "25-crimson-preview",
+                "20250101-000000",
+                "https://e/crimson",
+            ),
+        ]);
 
         let variant = Query {
             device: "k1",
@@ -547,45 +550,40 @@ mod tests {
     }
 
     #[test]
-    fn filters_groups_and_images() {
+    fn filters_images_by_arch_device_and_latest() {
         let index = ImageIndex::parse(SAMPLE).unwrap();
 
         let all = index.filter(&ImageQuery::default());
-        assert_eq!(all.len(), 3);
-        assert_eq!(all[1].device, "jh7110");
-        assert_eq!(all[1].images.len(), 2);
+        assert_eq!(all.len(), 4);
+
+        let jh7110 = index.filter(&ImageQuery {
+            arch: Some(Arch::Riscv),
+            device: Some("JH"),
+            ..ImageQuery::default()
+        });
+        assert_eq!(jh7110.len(), 2);
 
         let latest = index.filter(&ImageQuery {
             arch: Some(Arch::Riscv),
             device: Some("JH"),
-            filter: ImageFilter {
-                latest: true,
-                ..ImageFilter::default()
-            },
+            latest: true,
+            ..ImageQuery::default()
         });
         assert_eq!(latest.len(), 1);
         assert_eq!(latest[0].device, "jh7110");
-        assert_eq!(latest[0].images.len(), 1);
-        assert_eq!(latest[0].images[0].variant, "25-crimson-preview");
+        assert_eq!(latest[0].variant, "25-crimson-preview");
 
         let beige = index.filter(&ImageQuery {
-            filter: ImageFilter {
-                variant: Some("BEIGE"),
-                ..ImageFilter::default()
-            },
+            variant: Some("BEIGE"),
             ..ImageQuery::default()
         });
         assert_eq!(beige.len(), 1);
         assert_eq!(beige[0].device, "jh7110");
-        assert_eq!(beige[0].images.len(), 1);
 
         assert!(
             index
                 .filter(&ImageQuery {
-                    filter: ImageFilter {
-                        variant: Some("nonexistent"),
-                        ..ImageFilter::default()
-                    },
+                    variant: Some("nonexistent"),
                     ..ImageQuery::default()
                 })
                 .is_empty()
@@ -594,10 +592,12 @@ mod tests {
 
     #[test]
     fn reports_missing_images() {
-        let index = images(vec![(
+        let index = ImageIndex::from(vec![image(
             Arch::Riscv,
             "k1",
-            vec![image("v", "20240101-000000", "https://e/a")],
+            "v",
+            "20240101-000000",
+            "https://e/a",
         )]);
 
         assert!(matches!(

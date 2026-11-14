@@ -13,7 +13,7 @@ mod text;
 
 pub use arch::Arch;
 pub use devices::{DeviceGroup, DeviceIndex, DeviceQuery};
-pub use images::{Candidate, Image, ImageFilter, ImageGroup, ImageIndex, ImageQuery, Query};
+pub use images::{Candidate, Image, ImageIndex, ImageQuery, Query};
 
 use std::path::Path;
 
@@ -76,7 +76,7 @@ fn format_candidates(candidates: &[Candidate]) -> String {
         .join(", ")
 }
 
-/// Serialize a device or image group list as pretty JSON, the format shared by
+/// Serialize a device list or image list as pretty JSON, the format shared by
 /// every index.
 pub(crate) fn to_json<T: serde::Serialize + ?Sized>(groups: &T) -> Result<String> {
     Ok(serde_json::to_string_pretty(groups)?)

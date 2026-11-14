@@ -5,14 +5,13 @@
 //! `<base>/<date>/<arch>/` and turns every `deepin-*.{iso,tar.xz,tar.gz}` file
 //! into an [`Image`] record, mirroring `ref/update-image.js`.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use astral_html::Document;
 use futures_util::stream::{self, StreamExt, TryStreamExt};
 
 use catalog::date;
-use catalog::{Arch, Image, ImageGroup, ImageIndex};
+use catalog::{Arch, Image, ImageIndex};
 
 /// Errors produced while crawling the image repository.
 #[derive(Debug, thiserror::Error)]
@@ -87,45 +86,24 @@ pub async fn image_index(options: &Options) -> Result<ImageIndex> {
         })
         .collect();
 
-    let mut records: Vec<Record> = stream::iter(jobs)
+    let images: Vec<Image> = stream::iter(jobs)
         .map(|(date, arch, dir)| async move {
             let entries = parse_index(&fetch::http::get(&format!("{base}/{date}{dir}/")).await?)?;
             Ok::<_, Error>(
                 entries
                     .iter()
-                    .filter_map(|entry| record_from(base, arch, &date, &dir, entry))
+                    .filter_map(|entry| image_from(base, arch, &date, &dir, entry))
                     .collect::<Vec<_>>(),
             )
         })
         .buffer_unordered(concurrency)
-        .try_collect::<Vec<Vec<Record>>>()
+        .try_collect::<Vec<Vec<Image>>>()
         .await?
         .into_iter()
         .flatten()
         .collect();
 
-    // Sort by link so each device's images keep their chronological (path)
-    // order once they are grouped.
-    records.sort_by(|a, b| a.image.link.cmp(&b.image.link));
-
-    let mut groups: BTreeMap<(Arch, String), Vec<Image>> = BTreeMap::new();
-    for record in records {
-        groups
-            .entry((record.arch, record.device))
-            .or_default()
-            .push(record.image);
-    }
-
-    let groups: Vec<ImageGroup> = groups
-        .into_iter()
-        .map(|((arch, device), images)| ImageGroup {
-            arch,
-            device,
-            images,
-        })
-        .collect();
-
-    Ok(ImageIndex::from(groups))
+    Ok(ImageIndex::from(images))
 }
 
 pub fn write_file(index: &ImageIndex, path: impl AsRef<Path>) -> Result<()> {
@@ -134,13 +112,7 @@ pub fn write_file(index: &ImageIndex, path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-/// A single file matched while crawling, before it is grouped.
-struct Record {
-    arch: Arch,
-    device: String,
-    image: Image,
-}
-
+/// A single file matched while crawling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Entry {
     /// Link target as written in the index (a file name or `dir/`).
@@ -205,13 +177,7 @@ fn arch_from_dir(dir: &str) -> Option<Arch> {
     }
 }
 
-fn record_from(
-    base: &str,
-    arch: Arch,
-    date: &str,
-    arch_dir: &str,
-    entry: &Entry,
-) -> Option<Record> {
+fn image_from(base: &str, arch: Arch, date: &str, arch_dir: &str, entry: &Entry) -> Option<Image> {
     let stem = image_stem(&entry.name)?;
     let parts: Vec<&str> = stem.split('-').collect();
 
@@ -233,15 +199,13 @@ fn record_from(
         "generic".to_owned()
     };
 
-    Some(Record {
+    Some(Image {
         arch,
         device,
-        image: Image {
-            variant: parts[1..4].join("-"),
-            size: entry.size,
-            date: date::from_stem(stem).unwrap_or_default(),
-            link: format!("{base}/{date}{arch_dir}/{}", entry.name),
-        },
+        variant: parts[1..4].join("-"),
+        size: entry.size,
+        date: date::from_stem(stem).unwrap_or_default(),
+        link: format!("{base}/{date}{arch_dir}/{}", entry.name),
     })
 }
 
@@ -340,7 +304,7 @@ mod tests {
             "deepin-25-crimson-preview-riscv64-k1-cloud-20250806-180508.tar.xz",
             4097381076,
         );
-        let record = record_from(
+        let image = image_from(
             "https://example.com",
             Arch::Riscv,
             "20250806/",
@@ -349,13 +313,13 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(record.arch, Arch::Riscv);
-        assert_eq!(record.device, "k1-cloud");
-        assert_eq!(record.image.variant, "25-crimson-preview");
-        assert_eq!(record.image.date, "20250806-180508");
-        assert_eq!(record.image.size, 4097381076);
+        assert_eq!(image.arch, Arch::Riscv);
+        assert_eq!(image.device, "k1-cloud");
+        assert_eq!(image.variant, "25-crimson-preview");
+        assert_eq!(image.date, "20250806-180508");
+        assert_eq!(image.size, 4097381076);
         assert_eq!(
-            record.image.link,
+            image.link,
             "https://example.com/20250806/riscv64/deepin-25-crimson-preview-riscv64-k1-cloud-20250806-180508.tar.xz"
         );
     }
@@ -366,7 +330,7 @@ mod tests {
             "deepin-23-beige-preview-riscv64-20250107-145422.iso",
             3621724160,
         );
-        let record = record_from(
+        let image = image_from(
             "https://example.com",
             Arch::Riscv,
             "20250107/",
@@ -375,15 +339,15 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(record.device, "generic");
-        assert_eq!(record.image.variant, "23-beige-preview");
+        assert_eq!(image.device, "generic");
+        assert_eq!(image.variant, "23-beige-preview");
     }
 
     #[test]
     fn ignores_other_architectures_and_non_images() {
         let arch = "riscv64";
         assert!(
-            record_from(
+            image_from(
                 "https://example.com",
                 Arch::Riscv,
                 "20240613/",
@@ -393,7 +357,7 @@ mod tests {
             .is_none()
         );
         assert!(
-            record_from(
+            image_from(
                 "https://example.com",
                 Arch::Riscv,
                 "20250625/",
@@ -403,7 +367,7 @@ mod tests {
             .is_none()
         );
         assert!(
-            record_from(
+            image_from(
                 "https://example.com",
                 Arch::Riscv,
                 "20250625/",
@@ -416,7 +380,7 @@ mod tests {
 
     #[test]
     fn extracts_timestamp_before_trailing_suffixes() {
-        let record = record_from(
+        let image = image_from(
             "https://example.com",
             Arch::Arm64,
             "20240111/",
@@ -428,13 +392,13 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(record.image.date, "20240111-115726");
-        assert_eq!(record.image.variant, "23-beige-beta3");
+        assert_eq!(image.date, "20240111-115726");
+        assert_eq!(image.variant, "23-beige-beta3");
     }
 
     #[test]
     fn accepts_variants_with_extra_segments() {
-        let record = record_from(
+        let image = image_from(
             "https://example.com",
             Arch::Arm64,
             "20240705/",
@@ -446,15 +410,17 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(record.image.variant, "23-beige-preview");
-        assert_eq!(record.device, "generic");
-        assert_eq!(record.image.date, "20240705-135729");
+        assert_eq!(image.variant, "23-beige-preview");
+        assert_eq!(image.device, "generic");
+        assert_eq!(image.date, "20240705-135729");
     }
 
     #[test]
     fn writes_and_reloads_file() {
         let index = ImageIndex::parse(
-            "[[riscv.jh7110]]\n\
+            "[[images]]\n\
+             arch = \"riscv\"\n\
+             device = \"jh7110\"\n\
              variant = \"25-crimson-preview\"\n\
              size = 3652822392\n\
              date = \"20250603-113217\"\n\

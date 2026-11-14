@@ -74,8 +74,8 @@ fn generate_manifest(args: GenerateArgs) -> Result<()> {
         Some(path) => {
             crawl::write_file(&index, path)?;
             eprintln!(
-                "wrote {} image group(s) to {}",
-                index.groups().len(),
+                "wrote {} image(s) to {}",
+                index.images().len(),
                 path.display()
             );
         }
