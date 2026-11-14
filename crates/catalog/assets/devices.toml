@@ -10,6 +10,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/jh7110",
 ]
+flash_via = ["dd-whole"]
 
 [[devices]]
 arch = "riscv"
@@ -25,6 +26,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/eic7700",
 ]
+flash_via = ["dd-partitions", "fastboot"]
 
 [[devices]]
 arch = "riscv"
@@ -37,6 +39,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/sg2042",
 ]
+flash_via = ["dd-partitions"]
 
 [[devices]]
 arch = "riscv"
@@ -48,6 +51,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/sg2044",
 ]
+flash_via = ["dd-partitions"]
 
 [[devices]]
 arch = "riscv"
@@ -60,6 +64,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/th1520",
 ]
+flash_via = ["fastboot"]
 
 [[devices]]
 arch = "riscv"
@@ -77,6 +82,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/k1",
 ]
+flash_via = ["fastboot"]
 
 [[devices]]
 arch = "riscv"
@@ -88,6 +94,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/k3",
 ]
+flash_via = ["fastboot"]
 
 [[devices]]
 arch = "riscv"
@@ -102,6 +109,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/generic",
 ]
+flash_via = ["iso-write"]
 
 [[devices]]
 arch = "arm64"
@@ -113,6 +121,7 @@ devices = [
 links = [
     "https://cdimage.deepin.com/arm64/phytiumpi/README.md",
 ]
+flash_via = ["dd-whole"]
 
 [[devices]]
 arch = "arm64"
@@ -125,6 +134,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/q6a",
 ]
+flash_via = ["dd-partitions"]
 
 [[devices]]
 arch = "arm64"
@@ -139,6 +149,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/rockchip",
 ]
+flash_via = ["rkdeveloptool"]
 
 [[devices]]
 arch = "arm64"
@@ -151,3 +162,4 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/a733",
 ]
+flash_via = ["dd-partitions"]
