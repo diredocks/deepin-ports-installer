@@ -38,6 +38,6 @@ pub use error::{Error, Result};
 pub use job::job;
 pub use prepare::{PrepareOptions, Prepared, prepare};
 pub use progress::{Phase, Progress};
-pub use source::{Source, SourceOptions, resolve};
+pub use source::{Source, SourceOptions, remote, resolve};
 
 pub use crate::catalog::{Artifact, Role};

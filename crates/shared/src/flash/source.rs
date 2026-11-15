@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::catalog::{Arch, DeviceIndex, Image, ImageIndex, Query};
+use crate::catalog::{Arch, DeviceIndex, FlashVia, Image, ImageIndex, Query};
 
 use crate::flash::{Error, Result};
 
@@ -10,7 +10,13 @@ use crate::flash::{Error, Result};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     /// An image resolved from the bundled index; it may need downloading.
-    Remote(Image),
+    Remote {
+        /// Selected image record.
+        image: Image,
+
+        /// Write methods accepted by the matching device group, in preference order.
+        flash_via: Vec<FlashVia>,
+    },
 
     /// A local image file named by the caller.
     Local {
@@ -35,37 +41,24 @@ pub struct SourceOptions<'a> {
     pub date: Option<&'a str>,
 }
 
-impl SourceOptions<'_> {
-    /// Whether any filter is set.
-    pub fn is_empty(&self) -> bool {
-        self.arch.is_none() && self.variant.is_none() && self.date.is_none()
-    }
-}
-
 /// Resolve what `source` names: a local file, or a device model when it is no path.
 pub fn resolve(source: &str, options: &SourceOptions<'_>) -> Result<Source> {
-    match local_path(source) {
+    let path = PathBuf::from(source);
+    let local_path = (source.chars().any(std::path::is_separator) || path.is_file()).then_some(path);
+
+    match local_path {
         Some(path) => local(path, options),
         None => remote(source, options),
     }
 }
 
-/// The file `source` names, when it names an image rather than a device model.
-fn local_path(source: &str) -> Option<PathBuf> {
-    let path = PathBuf::from(source);
-    let is_file = source.chars().any(std::path::is_separator) || path.is_file();
-
-    is_file.then_some(path)
-}
-
 /// Read the metadata of a local image file.
 fn local(path: PathBuf, options: &SourceOptions<'_>) -> Result<Source> {
-    if !options.is_empty() {
+    if *options != SourceOptions::default() {
         return Err(Error::FiltersWithLocalSource);
     }
 
     let metadata = crate::fsx::metadata(&path)?;
-
     if !metadata.is_file() {
         return Err(Error::NotAFile { path });
     }
@@ -77,7 +70,7 @@ fn local(path: PathBuf, options: &SourceOptions<'_>) -> Result<Source> {
 }
 
 /// Resolve a device model (or image-group slug) through the embedded index.
-fn remote(device: &str, options: &SourceOptions<'_>) -> Result<Source> {
+pub fn remote(device: &str, options: &SourceOptions<'_>) -> Result<Source> {
     let images = ImageIndex::embedded()?;
     let devices = DeviceIndex::embedded()?;
 
@@ -88,7 +81,15 @@ fn remote(device: &str, options: &SourceOptions<'_>) -> Result<Source> {
         date: options.date,
     };
 
-    Ok(Source::Remote(images.resolve(&devices, &query)?))
+    let image = images.resolve(&devices, &query)?;
+    let flash_via = devices
+        .groups()
+        .iter()
+        .find(|group| group.arch == image.arch && group.soc.eq_ignore_ascii_case(&image.device))
+        .map(|group| group.flash_via.clone())
+        .unwrap_or_default();
+
+    Ok(Source::Remote { image, flash_via })
 }
 
 #[cfg(test)]
@@ -147,12 +148,14 @@ mod tests {
 
     #[test]
     fn resolves_device_models_through_the_embedded_index() {
-        let Source::Remote(image) = resolve("visionfive-2", &options()).unwrap() else {
+        let Source::Remote { image, flash_via } = resolve("visionfive-2", &options()).unwrap()
+        else {
             panic!("expected a remote image");
         };
 
         assert!(image.link.contains("-jh7110-"), "{}", image.link);
         assert!(image.size > 0);
+        assert_eq!(flash_via, [FlashVia::DdWhole]);
     }
 
     #[test]

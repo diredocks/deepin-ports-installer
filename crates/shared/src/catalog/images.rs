@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::text::contains_ignore_case;
+use crate::catalog::contains_ignore_case;
 use crate::catalog::{Arch, DeviceIndex, Error, Result, date};
 
 /// An image group that matched a [`Query`] but needs disambiguation.
@@ -112,7 +112,7 @@ impl ImageIndex {
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        Self::parse(&crate::catalog::read_document(path.as_ref())?)
+        Self::parse(&crate::fsx::read_to_string(path.as_ref())?)
     }
 
     pub fn embedded() -> Result<Self> {
@@ -211,7 +211,7 @@ impl ImageIndex {
     }
 
     pub fn to_json(&self) -> Result<String> {
-        crate::catalog::to_json(&self.images)
+        Ok(serde_json::to_string_pretty(&self.images)?)
     }
 
     /// Serialize the images back into the canonical flat `[[images]]` layout.

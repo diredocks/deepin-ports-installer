@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use shared::flash::{PrepareOptions, Prepared, Source, SourceOptions};
 use anyhow::{Context, Result, bail, ensure};
-use shared::archive::Archive;
-use shared::catalog::date;
 use clap::Args;
-use shared::fetch::download;
 use humansize::{BINARY, format_size};
+use shared::archive::Archive;
+use shared::catalog::{FlashVia, date};
+use shared::fetch::download;
+use shared::flash::{PrepareOptions, Prepared, Source, SourceOptions};
 
 use crate::cli::ImageFilterArgs;
 use crate::render;
@@ -26,6 +26,10 @@ pub struct FlashArgs {
 
     #[command(flatten)]
     pub filters: ImageFilterArgs,
+
+    /// Write method to use (defaults to the device's preferred method or artifact type)
+    #[arg(long, value_enum)]
+    pub via: Option<FlashVia>,
 
     /// Unpack the archive again even when an extraction is cached
     #[arg(short, long)]
@@ -86,8 +90,11 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
-    // TODO(privileged): launch the sidecar, build the job with `shared::flash::job`, stream
-    // its progress.
+    let plan = shared::flash::job(&source, &prepared, args.via, &args.target)
+        .context("failed to plan the flash job")?;
+    println!("via: {}", plan.via);
+
+    // TODO(privileged): launch the sidecar and stream `plan` progress.
     todo!(
         "writing images to block devices is not implemented yet; the artifacts are prepared in {}",
         prepared.directory.display()
@@ -97,7 +104,7 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 /// Where the image the source names is, or will be, cached.
 fn source_path(source: &Source) -> Result<PathBuf> {
     match source {
-        Source::Remote(image) => download::destination(None, &image.link)
+        Source::Remote { image, .. } => download::destination(None, &image.link)
             .context("failed to resolve the download destination"),
         Source::Local { path, .. } => Ok(path.clone()),
     }
@@ -105,7 +112,7 @@ fn source_path(source: &Source) -> Result<PathBuf> {
 
 fn print_source(source: &Source) {
     match source {
-        Source::Remote(image) => {
+        Source::Remote { image, .. } => {
             println!(
                 "source: {} (built {}, {})",
                 image.variant,

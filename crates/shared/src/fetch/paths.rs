@@ -19,7 +19,9 @@ const APPLICATION: &str = "deepin-ports-installer";
 /// On Linux this follows `XDG_CACHE_HOME`, on macOS it is under
 /// `~/Library/Caches`, and on Windows it is under `%LOCALAPPDATA%`.
 pub fn cache_dir() -> Result<PathBuf> {
-    project_dirs().map(|dirs| dirs.cache_dir().to_path_buf())
+    ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .map(|dirs| dirs.cache_dir().to_path_buf())
+        .ok_or(Error::ProjectDirs)
 }
 
 /// Whether `path` refers to a directory.
@@ -28,8 +30,4 @@ pub fn cache_dir() -> Result<PathBuf> {
 /// even one that does not exist yet.
 pub fn is_directory(path: &Path) -> bool {
     path.is_dir() || path.to_string_lossy().ends_with(['/', '\\'])
-}
-
-fn project_dirs() -> Result<ProjectDirs> {
-    ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION).ok_or(Error::ProjectDirs)
 }

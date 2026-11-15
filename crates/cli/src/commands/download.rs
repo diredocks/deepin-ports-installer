@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use shared::catalog::date;
-use shared::catalog::{DeviceIndex, ImageIndex, Query};
 use clap::Args;
-use shared::fetch::download::{self, Progress};
 use humansize::{BINARY, format_size};
+use shared::catalog::date;
+use shared::fetch::download::{self, Progress};
+use shared::flash::{self, Source, SourceOptions};
 
 use crate::cli::ImageFilterArgs;
 use crate::render;
@@ -29,19 +29,12 @@ pub struct DownloadArgs {
 }
 
 pub fn run(args: DownloadArgs, quiet: bool) -> Result<()> {
-    let images = ImageIndex::embedded().context("failed to load embedded image index")?;
-    let devices = DeviceIndex::embedded().context("failed to load embedded device index")?;
-
-    let query = Query {
-        device: &args.device,
-        arch: args.filters.arch,
-        variant: args.filters.variant.as_deref(),
-        date: args.filters.date.as_deref(),
+    let options = SourceOptions::from(&args.filters);
+    let Source::Remote { image, .. } = flash::remote(&args.device, &options)
+        .context("failed to resolve a downloadable image")?
+    else {
+        unreachable!("flash::remote only returns Source::Remote");
     };
-
-    let image = images
-        .resolve(&devices, &query)
-        .context("failed to resolve a downloadable image")?;
 
     let dest = download::destination(args.output.as_deref(), &image.link)?;
 

@@ -11,15 +11,12 @@ pub mod date;
 pub mod devices;
 pub mod flash;
 pub mod images;
-mod text;
 
 pub use arch::Arch;
 pub use artifact::{Artifact, Role};
 pub use devices::{DeviceGroup, DeviceIndex, DeviceQuery};
 pub use flash::FlashVia;
 pub use images::{Candidate, Image, ImageIndex, ImageQuery, Query};
-
-use std::path::Path;
 
 /// Errors produced while loading the bundled TOML indexes.
 #[derive(Debug, thiserror::Error)]
@@ -75,11 +72,11 @@ fn format_candidates(candidates: &[Candidate]) -> String {
         .join(", ")
 }
 
-/// Serialize a device list or image list as pretty JSON.
-pub(crate) fn to_json<T: serde::Serialize + ?Sized>(groups: &T) -> Result<String> {
-    Ok(serde_json::to_string_pretty(groups)?)
-}
-
-pub(crate) fn read_document(path: &Path) -> Result<String> {
-    crate::fsx::read_to_string(path).map_err(Error::from)
+pub(crate) fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    let needle_len = needle.len();
+    needle_len == 0
+        || haystack
+            .as_bytes()
+            .windows(needle_len)
+            .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }

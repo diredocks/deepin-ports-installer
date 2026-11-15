@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::text::contains_ignore_case;
+use crate::catalog::contains_ignore_case;
 use crate::catalog::{Arch, FlashVia, Result};
 
 /// One `[[devices]]` entry from `devices.toml`: a set of device models that
@@ -88,7 +88,7 @@ impl DeviceIndex {
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        Self::parse(&crate::catalog::read_document(path.as_ref())?)
+        Self::parse(&crate::fsx::read_to_string(path.as_ref())?)
     }
 
     pub fn embedded() -> Result<Self> {
@@ -118,7 +118,7 @@ impl DeviceIndex {
     }
 
     pub fn to_json(&self) -> Result<String> {
-        crate::catalog::to_json(&self.groups)
+        Ok(serde_json::to_string_pretty(&self.groups)?)
     }
 
     pub fn to_toml(&self) -> Result<String> {

@@ -171,7 +171,7 @@ fn arch_from_dir(dir: &str) -> Option<Arch> {
 }
 
 fn image_from(base: &str, arch: Arch, date: &str, arch_dir: &str, entry: &Entry) -> Option<Image> {
-    let stem = image_stem(&entry.name)?;
+    let stem = shared::archive::stem(&entry.name).or_else(|| entry.name.strip_suffix(".iso"))?;
     let parts: Vec<&str> = stem.split('-').collect();
 
     // A deepin image is `deepin-<variant>-<arch>-…`, where the variant is at
@@ -186,7 +186,7 @@ fn image_from(base: &str, arch: Arch, date: &str, arch_dir: &str, entry: &Entry)
         return None;
     }
 
-    let device = if is_archive(&entry.name) {
+    let device = if shared::archive::is_archive(&entry.name) {
         device_from(&parts)
     } else {
         "generic".to_owned()
@@ -200,20 +200,6 @@ fn image_from(base: &str, arch: Arch, date: &str, arch_dir: &str, entry: &Entry)
         date: date::from_stem(stem).unwrap_or_default(),
         link: format!("{base}/{date}{arch_dir}/{}", entry.name),
     })
-}
-
-/// Strip a known image file extension, or `None` for other files.
-///
-/// The tar suffixes come from [`archive`], so the crawler accepts exactly the
-/// archives the installer can unpack; an ISO is a published image but not an
-/// archive.
-fn image_stem(name: &str) -> Option<&str> {
-    shared::archive::stem(name).or_else(|| name.strip_suffix(".iso"))
-}
-
-/// Whether an image is a tar archive published for one device.
-fn is_archive(name: &str) -> bool {
-    shared::archive::is_archive(name)
 }
 
 /// Derive the device slug from a file name split on `-`.
@@ -272,14 +258,12 @@ mod tests {
 
     #[test]
     fn recognizes_archives_through_the_archive_crate() {
-        assert!(is_archive("deepin-25-crimson-preview-riscv64-k1.txz"));
-        assert!(!is_archive("deepin-25-crimson-preview-riscv64-k1.iso"));
-
-        assert_eq!(
-            image_stem("deepin-25-crimson-preview-riscv64-k1.iso"),
-            Some("deepin-25-crimson-preview-riscv64-k1")
-        );
-        assert_eq!(image_stem("md5sum_riscv64.txt"), None);
+        assert!(shared::archive::is_archive(
+            "deepin-25-crimson-preview-riscv64-k1.txz"
+        ));
+        assert!(!shared::archive::is_archive(
+            "deepin-25-crimson-preview-riscv64-k1.iso"
+        ));
     }
 
     #[test]

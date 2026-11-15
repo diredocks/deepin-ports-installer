@@ -2,88 +2,141 @@
 
 use std::path::Path;
 
-use crate::catalog::{DeviceGroup, FlashVia};
+use crate::catalog::{Artifact, FlashVia, Role};
 use crate::protocol::flash::FlashPlan;
 
-use crate::flash::{Error, Prepared, Result};
+use crate::flash::{Error, Prepared, Result, Source};
 
-/// The job that writes `prepared` to `target` on the devices of `group`.
+/// Build the [`FlashPlan`] that writes `prepared` to `target`.
 ///
-/// `via` must be one the group lists in `flash_via`.
+/// When `via` is provided and `source` lists allowed `flash_via` methods, `via`
+/// must be one of them. Otherwise, `via` defaults to the first listed method,
+/// or is inferred from a single whole-disk/ISO artifact.
 pub fn job(
+    source: &Source,
     prepared: &Prepared,
-    group: &DeviceGroup,
-    via: FlashVia,
+    via: Option<FlashVia>,
     target: &Path,
 ) -> Result<FlashPlan> {
-    if !group.flash_via.contains(&via) {
-        return Err(Error::UnsupportedFlashVia {
-            via,
-            soc: group.soc.clone(),
-        });
-    }
+    let (soc, allowed) = match source {
+        Source::Remote { image, flash_via } => {
+            (Some(image.device.as_str()), flash_via.as_slice())
+        }
+        Source::Local { .. } => (None, &[][..]),
+    };
+
+    let via = select_via(soc, allowed, &prepared.artifacts, via)?;
 
     Ok(FlashPlan {
-        arch: group.arch,
-        soc: group.soc.clone(),
         via,
         target: target.to_path_buf(),
         artifacts: prepared.artifacts.clone(),
     })
 }
 
+fn select_via(
+    soc: Option<&str>,
+    allowed: &[FlashVia],
+    artifacts: &[Artifact],
+    requested: Option<FlashVia>,
+) -> Result<FlashVia> {
+    if let Some(via) = requested {
+        if !allowed.is_empty() && !allowed.contains(&via) {
+            return Err(Error::UnsupportedFlashVia {
+                via,
+                soc: soc.unwrap_or_default().to_owned(),
+            });
+        }
+        return Ok(via);
+    }
+
+    if let Some(&via) = allowed.first() {
+        return Ok(via);
+    }
+
+    match artifacts {
+        [artifact] if artifact.role == Role::Disk => Ok(FlashVia::DdWhole),
+        [artifact] if artifact.role == Role::Iso => Ok(FlashVia::IsoWrite),
+        _ => Err(Error::MissingFlashVia),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{Arch, Artifact, Role};
+    use crate::catalog::{Arch, Image};
     use std::path::PathBuf;
 
-    fn group(flash_via: &[FlashVia]) -> DeviceGroup {
-        DeviceGroup {
-            arch: Arch::Riscv,
-            platform: "sifive-u74".into(),
-            soc: "jh7110".into(),
-            devices: vec!["visionfive-2".into()],
-            links: Vec::new(),
+    fn remote_source(flash_via: &[FlashVia]) -> Source {
+        Source::Remote {
+            image: Image {
+                arch: Arch::Riscv,
+                device: "jh7110".into(),
+                variant: "25-crimson".into(),
+                size: 42,
+                date: "20250101-000000".into(),
+                link: "https://example.com/image.img".into(),
+            },
             flash_via: flash_via.to_vec(),
         }
     }
 
-    fn prepared() -> Prepared {
+    fn local_source() -> Source {
+        Source::Local {
+            path: PathBuf::from("/cache/deepin.img"),
+            size: 42,
+        }
+    }
+
+    fn prepared_with(roles: &[Role]) -> Prepared {
         Prepared {
             directory: PathBuf::from("/cache/jh7110"),
-            artifacts: vec![Artifact {
-                path: PathBuf::from("/cache/jh7110/deepin.img"),
-                role: Role::Disk,
-                size: 42,
-            }],
+            artifacts: roles
+                .iter()
+                .map(|&role| Artifact {
+                    path: PathBuf::from(format!("/cache/jh7110/{role}.bin")),
+                    role,
+                    size: 42,
+                })
+                .collect(),
             unverified: Vec::new(),
         }
     }
 
     #[test]
     fn builds_the_job_from_the_device_group() {
+        let source = remote_source(&[FlashVia::DdWhole]);
+        let prepared = prepared_with(&[Role::Disk]);
         let plan = job(
-            &prepared(),
-            &group(&[FlashVia::DdWhole]),
-            FlashVia::DdWhole,
+            &source,
+            &prepared,
+            Some(FlashVia::DdWhole),
             Path::new("/dev/sdb"),
         )
         .unwrap();
 
-        assert_eq!(plan.arch, Arch::Riscv);
-        assert_eq!(plan.soc, "jh7110");
         assert_eq!(plan.via, FlashVia::DdWhole);
         assert_eq!(plan.target, PathBuf::from("/dev/sdb"));
-        assert_eq!(plan.artifacts, prepared().artifacts);
+        assert_eq!(plan.artifacts, prepared.artifacts);
+    }
+
+    #[test]
+    fn defaults_to_the_device_groups_preferred_method() {
+        let source = remote_source(&[FlashVia::DdPartitions, FlashVia::Fastboot]);
+        let prepared = prepared_with(&[Role::Boot, Role::Root]);
+        let plan = job(&source, &prepared, None, Path::new("/dev/sdb")).unwrap();
+
+        assert_eq!(plan.via, FlashVia::DdPartitions);
     }
 
     #[test]
     fn refuses_a_method_the_device_does_not_list() {
+        let source = remote_source(&[FlashVia::DdWhole]);
+        let prepared = prepared_with(&[Role::Disk]);
         let error = job(
-            &prepared(),
-            &group(&[FlashVia::DdWhole]),
-            FlashVia::Fastboot,
+            &source,
+            &prepared,
+            Some(FlashVia::Fastboot),
             Path::new("/dev/sdb"),
         )
         .unwrap_err();
@@ -95,5 +148,46 @@ mod tests {
                 soc,
             } if soc == "jh7110"
         ));
+    }
+
+    #[test]
+    fn infers_write_method_for_local_whole_disk_and_iso() {
+        let source = local_source();
+
+        let disk_plan = job(
+            &source,
+            &prepared_with(&[Role::Disk]),
+            None,
+            Path::new("/dev/sdb"),
+        )
+        .unwrap();
+        assert_eq!(disk_plan.via, FlashVia::DdWhole);
+
+        let iso_plan = job(
+            &source,
+            &prepared_with(&[Role::Iso]),
+            None,
+            Path::new("/dev/sdb"),
+        )
+        .unwrap();
+        assert_eq!(iso_plan.via, FlashVia::IsoWrite);
+    }
+
+    #[test]
+    fn requires_explicit_via_when_local_artifacts_are_ambiguous() {
+        let source = local_source();
+        let prepared = prepared_with(&[Role::Boot, Role::Root]);
+
+        let error = job(&source, &prepared, None, Path::new("/dev/sdb")).unwrap_err();
+        assert!(matches!(error, Error::MissingFlashVia));
+
+        let plan = job(
+            &source,
+            &prepared,
+            Some(FlashVia::Fastboot),
+            Path::new("/dev/sdb"),
+        )
+        .unwrap();
+        assert_eq!(plan.via, FlashVia::Fastboot);
     }
 }

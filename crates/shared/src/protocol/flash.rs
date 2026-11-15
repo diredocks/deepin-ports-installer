@@ -1,22 +1,19 @@
 //! The job an unprivileged frontend hands to the privileged helper.
 //!
-//! Declarative on purpose: a device group, a write method, a target and the image
-//! files — never a layout or a command line.
+//! Carries only what the helper needs to execute the write: the write method,
+//! target block device, and ordered artifacts (to be extended with an explicit
+//! layout table when partition/offset drivers are implemented) — never raw
+//! command lines.
 
 use std::path::PathBuf;
 
-use crate::catalog::{Arch, Artifact, FlashVia};
 use serde::{Deserialize, Serialize};
+
+use crate::catalog::{Artifact, FlashVia};
 
 /// What the helper should write, and where.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FlashPlan {
-    /// Architecture of the device group whose layout applies.
-    pub arch: Arch,
-
-    /// SoC slug of that device group, e.g. `jh7110`.
-    pub soc: String,
-
     /// Write method to use.
     pub via: FlashVia,
 

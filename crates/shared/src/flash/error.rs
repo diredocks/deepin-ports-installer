@@ -51,6 +51,10 @@ pub enum Error {
         /// SoC of the device group that does not support it.
         soc: String,
     },
+
+    /// No write method was provided and none could be inferred from the artifacts.
+    #[error("cannot infer write method from the prepared artifacts; specify `--via`")]
+    MissingFlashVia,
 }
 
 /// Convenience alias used across this crate.

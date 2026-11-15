@@ -105,8 +105,6 @@ mod tests {
     fn flash_jobs_round_trip_with_their_plan() {
         let request = Request::Flash {
             plan: FlashPlan {
-                arch: crate::catalog::Arch::Riscv,
-                soc: "jh7110".into(),
                 via: crate::catalog::FlashVia::DdWhole,
                 target: "/dev/sdb".into(),
                 artifacts: vec![crate::catalog::Artifact {
