@@ -90,7 +90,7 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
-    let plan = shared::flash::job(&source, &prepared, args.via, &args.target)
+    let plan = shared::flash::plan(&source, &prepared, args.via, &args.target)
         .context("failed to plan the flash job")?;
     println!("via: {}", plan.via);
 

@@ -12,7 +12,7 @@ use crate::flash::{Error, Prepared, Result, Source};
 /// When `via` is provided and `source` lists allowed `flash_via` methods, `via`
 /// must be one of them. Otherwise, `via` defaults to the first listed method,
 /// or is inferred from a single whole-disk/ISO artifact.
-pub fn job(
+pub fn plan(
     source: &Source,
     prepared: &Prepared,
     via: Option<FlashVia>,
@@ -107,7 +107,7 @@ mod tests {
     fn builds_the_job_from_the_device_group() {
         let source = remote_source(&[FlashVia::DdWhole]);
         let prepared = prepared_with(&[Role::Disk]);
-        let plan = job(
+        let plan = plan(
             &source,
             &prepared,
             Some(FlashVia::DdWhole),
@@ -124,7 +124,7 @@ mod tests {
     fn defaults_to_the_device_groups_preferred_method() {
         let source = remote_source(&[FlashVia::DdPartitions, FlashVia::Fastboot]);
         let prepared = prepared_with(&[Role::Boot, Role::Root]);
-        let plan = job(&source, &prepared, None, Path::new("/dev/sdb")).unwrap();
+        let plan = plan(&source, &prepared, None, Path::new("/dev/sdb")).unwrap();
 
         assert_eq!(plan.via, FlashVia::DdPartitions);
     }
@@ -133,7 +133,7 @@ mod tests {
     fn refuses_a_method_the_device_does_not_list() {
         let source = remote_source(&[FlashVia::DdWhole]);
         let prepared = prepared_with(&[Role::Disk]);
-        let error = job(
+        let error = plan(
             &source,
             &prepared,
             Some(FlashVia::Fastboot),
@@ -154,7 +154,7 @@ mod tests {
     fn infers_write_method_for_local_whole_disk_and_iso() {
         let source = local_source();
 
-        let disk_plan = job(
+        let disk_plan = plan(
             &source,
             &prepared_with(&[Role::Disk]),
             None,
@@ -163,7 +163,7 @@ mod tests {
         .unwrap();
         assert_eq!(disk_plan.via, FlashVia::DdWhole);
 
-        let iso_plan = job(
+        let iso_plan = plan(
             &source,
             &prepared_with(&[Role::Iso]),
             None,
@@ -178,10 +178,10 @@ mod tests {
         let source = local_source();
         let prepared = prepared_with(&[Role::Boot, Role::Root]);
 
-        let error = job(&source, &prepared, None, Path::new("/dev/sdb")).unwrap_err();
+        let error = plan(&source, &prepared, None, Path::new("/dev/sdb")).unwrap_err();
         assert!(matches!(error, Error::MissingFlashVia));
 
-        let plan = job(
+        let plan = plan(
             &source,
             &prepared,
             Some(FlashVia::Fastboot),
