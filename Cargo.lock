@@ -74,18 +74,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "archive"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "fsx",
- "tar",
- "testutils",
- "thiserror",
- "xz2",
-]
-
-[[package]]
 name = "astral-html"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -140,19 +128,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "catalog"
-version = "0.1.0"
-dependencies = [
- "clap",
- "fsx",
- "serde",
- "serde_json",
- "testutils",
- "thiserror",
- "toml",
-]
-
-[[package]]
 name = "cc"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -177,16 +152,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "rand_core",
-]
-
-[[package]]
-name = "checksum"
-version = "0.1.0"
-dependencies = [
- "fsx",
- "sha2",
- "testutils",
- "thiserror",
 ]
 
 [[package]]
@@ -234,18 +199,14 @@ name = "cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "archive",
- "catalog",
  "clap",
  "comfy-table",
- "drives",
  "env_logger",
- "fetch",
- "flash",
  "humansize",
  "indicatif",
  "libc",
  "log",
+ "shared",
  "tokio",
 ]
 
@@ -456,16 +417,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "drives"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "toml",
-]
-
-[[package]]
 name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -525,18 +476,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fetch"
-version = "0.1.0"
-dependencies = [
- "directories",
- "fsx",
- "reqwest",
- "rustls",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "filetime"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -551,19 +490,6 @@ name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
-
-[[package]]
-name = "flash"
-version = "0.1.0"
-dependencies = [
- "archive",
- "catalog",
- "checksum",
- "fsx",
- "sidecar-protocol",
- "testutils",
- "thiserror",
-]
 
 [[package]]
 name = "flate2"
@@ -583,15 +509,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "fsx"
-version = "0.1.0"
-dependencies = [
- "serde",
- "testutils",
- "thiserror",
 ]
 
 [[package]]
@@ -1096,13 +1013,10 @@ name = "manifest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "archive",
  "astral-html",
- "catalog",
  "clap",
- "fetch",
- "fsx",
  "futures-util",
+ "shared",
  "thiserror",
  "tokio",
 ]
@@ -1603,6 +1517,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "directories",
+ "flate2",
+ "libc",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "thiserror",
+ "toml",
+ "tungstenite",
+ "url",
+ "xz2",
+]
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1612,38 +1547,14 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 name = "sidecar"
 version = "0.1.0"
 dependencies = [
- "catalog",
- "fsx",
  "futures-util",
  "serde_json",
- "sidecar-protocol",
+ "shared",
  "thiserror",
  "tokio",
  "tokio-tungstenite",
  "tungstenite",
  "url",
-]
-
-[[package]]
-name = "sidecar-client"
-version = "0.1.0"
-dependencies = [
- "fsx",
- "libc",
- "serde_json",
- "sidecar-protocol",
- "thiserror",
- "tungstenite",
-]
-
-[[package]]
-name = "sidecar-protocol"
-version = "0.1.0"
-dependencies = [
- "catalog",
- "fsx",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1758,15 +1669,6 @@ checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
 dependencies = [
  "filetime",
  "libc",
-]
-
-[[package]]
-name = "testutils"
-version = "0.1.0"
-dependencies = [
- "sha2",
- "tar",
- "xz2",
 ]
 
 [[package]]

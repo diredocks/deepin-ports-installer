@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use catalog::{Arch, DeviceIndex, DeviceQuery};
+use shared::catalog::{Arch, DeviceIndex, DeviceQuery};
 
 use crate::cli::FormatArg;
 use crate::render;

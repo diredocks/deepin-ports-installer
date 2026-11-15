@@ -3,7 +3,7 @@
 //! The sidecar runs as root (through the platform elevation mechanism: `pkexec`
 //! on Linux). It binds a loopback WebSocket, announces its address and a per-run
 //! token on stdout, and serves the closed set of operations in
-//! [`sidecar_protocol::Request`].
+//! [`shared::protocol::Request`].
 
 use std::io::{self, Write};
 use std::net::Ipv4Addr;
@@ -21,8 +21,8 @@ use tungstenite::http::{Response as HttpResponse, StatusCode};
 use crate::driver;
 use crate::platform;
 use crate::{Error, Result};
-use sidecar_protocol::flash::FlashPlan;
-use sidecar_protocol::{Handshake, Reply, Request};
+use shared::protocol::flash::FlashPlan;
+use shared::protocol::{Handshake, Reply, Request};
 
 /// How long to wait for the client to connect.
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(120);

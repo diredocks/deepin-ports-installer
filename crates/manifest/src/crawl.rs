@@ -10,15 +10,15 @@ use std::path::Path;
 use astral_html::Document;
 use futures_util::stream::{self, StreamExt, TryStreamExt};
 
-use catalog::date;
-use catalog::{Arch, Image, ImageIndex};
+use shared::catalog::date;
+use shared::catalog::{Arch, Image, ImageIndex};
 
 /// Errors produced while crawling the image repository.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Fetching a listing failed.
     #[error(transparent)]
-    Fetch(#[from] fetch::Error),
+    Fetch(#[from] shared::fetch::Error),
 
     /// A directory listing is not valid HTML.
     #[error("invalid HTML listing: {0}")]
@@ -26,11 +26,11 @@ pub enum Error {
 
     /// The index could not be serialized.
     #[error(transparent)]
-    Index(#[from] catalog::Error),
+    Index(#[from] shared::catalog::Error),
 
     /// The manifest could not be written to disk.
     #[error(transparent)]
-    Io(#[from] fsx::Error),
+    Io(#[from] shared::fsx::Error),
 }
 
 /// Convenience alias used across this module.
@@ -47,7 +47,7 @@ pub async fn image_index(concurrency: usize) -> Result<ImageIndex> {
     let base = BASE.trim_end_matches('/');
     let concurrency = concurrency.max(1);
 
-    let dates: Vec<String> = parse_index(&fetch::http::get(&format!("{base}/")).await?)?
+    let dates: Vec<String> = parse_index(&shared::fetch::http::get(&format!("{base}/")).await?)?
         .into_iter()
         .filter(is_date_dir)
         .map(|entry| entry.name)
@@ -55,7 +55,7 @@ pub async fn image_index(concurrency: usize) -> Result<ImageIndex> {
 
     let arch_lists: Vec<(String, Vec<(Arch, String)>)> = stream::iter(dates)
         .map(|date| async move {
-            let entries = parse_index(&fetch::http::get(&format!("{base}/{date}")).await?)?;
+            let entries = parse_index(&shared::fetch::http::get(&format!("{base}/{date}")).await?)?;
             let archs = entries
                 .into_iter()
                 .filter(|entry| entry.dir && entry.name != "../")
@@ -81,7 +81,7 @@ pub async fn image_index(concurrency: usize) -> Result<ImageIndex> {
 
     let images: Vec<Image> = stream::iter(jobs)
         .map(|(date, arch, dir)| async move {
-            let entries = parse_index(&fetch::http::get(&format!("{base}/{date}{dir}/")).await?)?;
+            let entries = parse_index(&shared::fetch::http::get(&format!("{base}/{date}{dir}/")).await?)?;
             Ok::<_, Error>(
                 entries
                     .iter()
@@ -101,7 +101,7 @@ pub async fn image_index(concurrency: usize) -> Result<ImageIndex> {
 
 pub fn write_file(index: &ImageIndex, path: impl AsRef<Path>) -> Result<()> {
     let document = index.to_toml()?;
-    fsx::write(path.as_ref(), document)?;
+    shared::fsx::write(path.as_ref(), document)?;
     Ok(())
 }
 
@@ -208,12 +208,12 @@ fn image_from(base: &str, arch: Arch, date: &str, arch_dir: &str, entry: &Entry)
 /// archives the installer can unpack; an ISO is a published image but not an
 /// archive.
 fn image_stem(name: &str) -> Option<&str> {
-    archive::stem(name).or_else(|| name.strip_suffix(".iso"))
+    shared::archive::stem(name).or_else(|| name.strip_suffix(".iso"))
 }
 
 /// Whether an image is a tar archive published for one device.
 fn is_archive(name: &str) -> bool {
-    archive::is_archive(name)
+    shared::archive::is_archive(name)
 }
 
 /// Derive the device slug from a file name split on `-`.

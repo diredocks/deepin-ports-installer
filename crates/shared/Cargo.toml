@@ -1,0 +1,40 @@
+[package]
+name = "shared"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = ["full"]
+full = [
+    "dep:directories",
+    "dep:flate2",
+    "dep:libc",
+    "dep:reqwest",
+    "dep:rustls",
+    "dep:sha2",
+    "dep:tar",
+    "dep:tungstenite",
+    "dep:url",
+    "dep:xz2",
+]
+# Derive `clap::ValueEnum` for shared value types such as `Arch`.
+cli = ["dep:clap"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
+directories = { version = "6", optional = true }
+flate2 = { version = "1", optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["charset", "rustls-no-provider"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = { version = "0.11", optional = true }
+tar = { version = "0.4", default-features = false, optional = true }
+thiserror = "2"
+toml = { version = "1", features = ["preserve_order"] }
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"], optional = true }
+url = { version = "2", optional = true }
+xz2 = { version = "0.1", features = ["static"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2", optional = true }

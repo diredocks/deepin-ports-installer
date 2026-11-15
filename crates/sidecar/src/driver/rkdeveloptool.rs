@@ -9,8 +9,8 @@
 //! The rockchip group (Radxa Rock 5 series, Rock 4D, DshanPi A1) needs this only
 //! for the on-board eMMC; its SD and NVMe media go through `dd-partitions`.
 
-use fsx::Amount;
-use sidecar_protocol::flash::FlashPlan;
+use shared::fsx::Amount;
+use shared::protocol::flash::FlashPlan;
 
 use crate::Result;
 

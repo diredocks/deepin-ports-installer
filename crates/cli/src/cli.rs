@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 
-pub use catalog::Arch;
+pub use shared::catalog::Arch;
 
 use crate::commands::{DevicesArgs, DownloadArgs, FlashArgs, ImagesArgs, TargetsArgs};
 use crate::render::OutputFormat;
@@ -81,7 +81,7 @@ pub struct ImageFilterArgs {
     pub date: Option<String>,
 }
 
-impl<'a> From<&'a ImageFilterArgs> for flash::SourceOptions<'a> {
+impl<'a> From<&'a ImageFilterArgs> for shared::flash::SourceOptions<'a> {
     fn from(args: &'a ImageFilterArgs) -> Self {
         Self {
             arch: args.arch,

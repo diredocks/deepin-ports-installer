@@ -10,8 +10,8 @@
 //! | sg2042, sg2044, rockchip | a single partition holding the root image |
 //! | a733 | a single partition that must start at sector 65536 |
 
-use fsx::Amount;
-use sidecar_protocol::flash::FlashPlan;
+use shared::fsx::Amount;
+use shared::protocol::flash::FlashPlan;
 
 use crate::Result;
 

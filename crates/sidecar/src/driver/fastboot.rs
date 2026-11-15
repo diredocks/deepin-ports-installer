@@ -7,8 +7,8 @@
 //! * th1520 on a TF card expects a 2M header, `boot`, `swap` and `root`;
 //! * eic7700 flashes boot and root into partitions of the same names.
 
-use fsx::Amount;
-use sidecar_protocol::flash::FlashPlan;
+use shared::fsx::Amount;
+use shared::protocol::flash::FlashPlan;
 
 use crate::Result;
 

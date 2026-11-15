@@ -3,8 +3,8 @@
 //! jh7110 (VisionFive 2, MilkV Mars, DC ROMA) and phytiumpi ship one `*.img` that
 //! already carries the partition table and the bootloader.
 
-use fsx::Amount;
-use sidecar_protocol::flash::FlashPlan;
+use shared::fsx::Amount;
+use shared::protocol::flash::FlashPlan;
 
 use crate::Result;
 

@@ -1,10 +1,10 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
-use catalog::{DeviceGroup, DeviceIndex, Image, ImageIndex};
+use shared::catalog::{DeviceGroup, DeviceIndex, Image, ImageIndex};
 use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
-use drives::{Target, TargetList};
+use shared::drives::{Target, TargetList};
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -199,7 +199,7 @@ fn progress_bar(total: u64, quiet: bool) -> ProgressBar {
 }
 
 /// Show a preparation progress report on `bar`.
-pub fn prepare_progress(bar: &ProgressBar, progress: &flash::Progress) {
+pub fn prepare_progress(bar: &ProgressBar, progress: &shared::flash::Progress) {
     bar.set_message(progress.phase.as_str());
 
     if let Some(total) = progress.amount.total {

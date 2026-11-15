@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use catalog::{ImageIndex, ImageQuery};
+use shared::catalog::{ImageIndex, ImageQuery};
 
 use crate::cli::{FormatArg, ImageFilterArgs};
 use crate::render;

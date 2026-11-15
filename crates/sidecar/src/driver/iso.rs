@@ -4,8 +4,8 @@
 //! `*.iso` that boots as it is. RISC-V boards cannot boot a Ventoy stick, so the
 //! medium is written directly.
 
-use fsx::Amount;
-use sidecar_protocol::flash::FlashPlan;
+use shared::fsx::Amount;
+use shared::protocol::flash::FlashPlan;
 
 use crate::Result;
 

@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use ::flash::{PrepareOptions, Prepared, Source, SourceOptions};
+use shared::flash::{PrepareOptions, Prepared, Source, SourceOptions};
 use anyhow::{Context, Result, bail, ensure};
-use archive::Archive;
-use catalog::date;
+use shared::archive::Archive;
+use shared::catalog::date;
 use clap::Args;
-use fetch::download;
+use shared::fetch::download;
 use humansize::{BINARY, format_size};
 
 use crate::cli::ImageFilterArgs;
@@ -43,7 +43,7 @@ pub struct FlashArgs {
 pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     let options = SourceOptions::from(&args.filters);
     let source =
-        ::flash::resolve(&args.source, &options).context("failed to resolve the flash source")?;
+        shared::flash::resolve(&args.source, &options).context("failed to resolve the flash source")?;
 
     print_source(&source);
     println!("target: {}", args.target.display());
@@ -70,14 +70,14 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     log::info!("preparing {}", downloaded.display());
 
     let bar = render::prepare_bar(quiet);
-    let result = ::flash::prepare(&downloaded, &options, |progress| {
+    let result = shared::flash::prepare(&downloaded, &options, |progress| {
         render::prepare_progress(&bar, &progress);
     });
     bar.finish_and_clear();
 
     let prepared = match result {
         Ok(prepared) => prepared,
-        Err(::flash::Error::Unverified { path }) => bail!(
+        Err(shared::flash::Error::Unverified { path }) => bail!(
             "`{}` is not covered by any checksum manifest; pass `--skip-verify` to accept it",
             path.display()
         ),
@@ -86,7 +86,7 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
-    // TODO(privileged): launch the sidecar, build the job with `flash::job`, stream
+    // TODO(privileged): launch the sidecar, build the job with `shared::flash::job`, stream
     // its progress.
     todo!(
         "writing images to block devices is not implemented yet; the artifacts are prepared in {}",

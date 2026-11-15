@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use drives::{Target, TargetList};
+use shared::drives::{Target, TargetList};
 
 use crate::cli::FormatArg;
 use crate::render;
