@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::catalog::{Artifact, FlashVia, Role};
-use crate::protocol::flash::FlashPlan;
+use crate::protocol::FlashPlan;
 
 use crate::flash::{Error, Prepared, Result, Source};
 

@@ -10,7 +10,7 @@ use tungstenite::stream::MaybeTlsStream;
 use super::platform;
 use crate::sidecar_client::{Error, Result};
 use crate::fsx::Amount;
-use crate::protocol::flash::FlashPlan;
+use crate::protocol::FlashPlan;
 use crate::protocol::{Handshake, Reply, Request};
 
 /// How to start the sidecar.

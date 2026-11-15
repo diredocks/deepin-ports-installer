@@ -3,12 +3,27 @@
 //! The operation set is closed on purpose: unknown commands fail to deserialize
 //! instead of being forwarded to a shell or OS.
 
+use std::path::PathBuf;
+
+use crate::catalog::{Artifact, FlashVia};
 use crate::fsx::Amount;
 use serde::{Deserialize, Serialize};
 
-pub mod flash;
+/// What the helper should write, and where.
+///
+/// To be extended with an explicit layout table when partition/offset drivers
+/// are implemented.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct FlashPlan {
+    /// Write method to use.
+    pub via: FlashVia,
 
-use crate::protocol::flash::FlashPlan;
+    /// Block device node to write to, e.g. `/dev/sdb`.
+    pub target: PathBuf,
+
+    /// Artifacts to write, in flash order.
+    pub artifacts: Vec<Artifact>,
+}
 
 /// Keep this enum small: every variant is code that runs as root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

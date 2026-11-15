@@ -10,7 +10,7 @@
 //! for the on-board eMMC; its SD and NVMe media go through `dd-partitions`.
 
 use shared::fsx::Amount;
-use shared::protocol::flash::FlashPlan;
+use shared::protocol::FlashPlan;
 
 use crate::Result;
 

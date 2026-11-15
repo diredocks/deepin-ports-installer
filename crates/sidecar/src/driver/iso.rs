@@ -5,7 +5,7 @@
 //! medium is written directly.
 
 use shared::fsx::Amount;
-use shared::protocol::flash::FlashPlan;
+use shared::protocol::FlashPlan;
 
 use crate::Result;
 

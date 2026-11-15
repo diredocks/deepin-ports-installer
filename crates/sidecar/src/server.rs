@@ -21,7 +21,7 @@ use tungstenite::http::{Response as HttpResponse, StatusCode};
 use crate::driver;
 use crate::platform;
 use crate::{Error, Result};
-use shared::protocol::flash::FlashPlan;
+use shared::protocol::FlashPlan;
 use shared::protocol::{Handshake, Reply, Request};
 
 /// How long to wait for the client to connect.

@@ -4,7 +4,7 @@
 //! already carries the partition table and the bootloader.
 
 use shared::fsx::Amount;
-use shared::protocol::flash::FlashPlan;
+use shared::protocol::FlashPlan;
 
 use crate::Result;
 

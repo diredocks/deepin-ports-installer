@@ -8,7 +8,7 @@
 //! * eic7700 flashes boot and root into partitions of the same names.
 
 use shared::fsx::Amount;
-use shared::protocol::flash::FlashPlan;
+use shared::protocol::FlashPlan;
 
 use crate::Result;
 

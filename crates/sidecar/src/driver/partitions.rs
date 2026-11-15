@@ -11,7 +11,7 @@
 //! | a733 | a single partition that must start at sector 65536 |
 
 use shared::fsx::Amount;
-use shared::protocol::flash::FlashPlan;
+use shared::protocol::FlashPlan;
 
 use crate::Result;
 
