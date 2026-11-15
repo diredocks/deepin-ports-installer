@@ -54,12 +54,10 @@ impl Sibling {
         }
     }
 
-    /// Path of the temporary file or directory.
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    /// Replace `destination` with this file.
     pub fn commit_file(mut self, destination: &Path) -> Result<()> {
         if destination.exists() {
             std::fs::remove_file(destination)
@@ -71,7 +69,6 @@ impl Sibling {
         Ok(())
     }
 
-    /// Replace `destination` with this directory.
     pub fn commit_dir(mut self, destination: &Path) -> Result<()> {
         if destination.exists() {
             std::fs::remove_dir_all(destination)

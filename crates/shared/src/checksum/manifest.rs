@@ -4,21 +4,12 @@ use std::path::{Path, PathBuf};
 
 use crate::checksum::{Error, Result};
 
-/// Length of a hex SHA-256 digest.
 const DIGEST_LEN: usize = 64;
-
-/// Suffixes that mark a file as a manifest naming the file before them.
 const SUFFIXES: [&str; 2] = [".sha256sum", ".sha256"];
-
-/// The tool whose per-architecture mirror listings (`sha256sum_riscv64.txt`)
-/// this crate reads.
 const TOOL: &str = "sha256sum";
 
-/// The stem a manifest file name is about, e.g. `image.tar.xz` for
-/// `image.tar.xz.sha256sum`.
-///
-/// The mirror's per-architecture form (`sha256sum_riscv64.txt`) names no single
-/// file rather than an empty one, so it yields `None`.
+/// Returns the subject stem (e.g. `image.tar.xz` for `image.tar.xz.sha256sum`),
+/// or `None` for per-architecture listings like `sha256sum_riscv64.txt`.
 fn subject_of(file_name: &str) -> Option<&str> {
     let lower = file_name.to_ascii_lowercase();
 
@@ -34,13 +25,10 @@ fn subject_of(file_name: &str) -> Option<&str> {
         .filter(|stem| !stem.is_empty())
 }
 
-/// Whether `file_name` names a sha256 manifest.
 fn is_manifest(file_name: &str) -> bool {
     subject_of(file_name).is_some() || tool_listing(file_name)
 }
 
-/// Whether `file_name` is the mirror's per-architecture listing, e.g.
-/// `sha256sum_riscv64.txt` or `sha256sum.txt`.
 fn tool_listing(file_name: &str) -> bool {
     let lower = file_name.to_ascii_lowercase();
 
@@ -49,18 +37,13 @@ fn tool_listing(file_name: &str) -> bool {
         .is_some_and(|rest| rest.is_empty() || rest.starts_with(['_', '.', '-']))
 }
 
-/// One `<checksum>  <file>` line of a manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Entry {
-    /// Lowercase hex checksum.
     digest: String,
-
-    /// File the checksum covers; empty for a lone digest.
     file: String,
 }
 
 impl Entry {
-    /// Parse one manifest line; `None` for blanks, comments and non-checksums.
     fn parse(line: &str) -> Option<Self> {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -95,23 +78,17 @@ impl Entry {
     }
 }
 
-/// The file name a manifest entry lists, ignoring any directory part.
 fn file_name(listed: &str) -> Option<&str> {
     Path::new(listed).file_name().and_then(|name| name.to_str())
 }
 
-/// A parsed checksum manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
-    /// File the manifest was read from.
     path: PathBuf,
-
-    /// Checksums it lists.
     entries: Vec<Entry>,
 }
 
 impl Manifest {
-    /// Read the manifest at `path`, if its name marks it as one.
     pub fn read(path: &Path) -> Result<Self> {
         let is_manifest = path
             .file_name()

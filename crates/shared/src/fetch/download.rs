@@ -9,16 +9,8 @@ use url::Url;
 use crate::fetch::paths;
 use crate::fetch::{Error, Result};
 
-/// Progress reported while downloading: bytes written so far, and the size of
-/// the file when it is known.
 pub use crate::fsx::Amount as Progress;
 
-/// Resolve where a download from `url` should be written.
-///
-/// A destination that is an existing directory, or that ends with a path
-/// separator, has the file name from `url` appended. Anything else is used
-/// verbatim. Without a destination, the file is placed in the `images`
-/// subdirectory of the platform cache directory.
 pub fn destination(output: Option<&Path>, url: &str) -> Result<PathBuf> {
     let file_name = file_name(url).ok_or_else(|| Error::LinkFileName(url.to_owned()))?;
 
@@ -29,14 +21,7 @@ pub fn destination(output: Option<&Path>, url: &str) -> Result<PathBuf> {
     }
 }
 
-/// Download `url` to `dest`, calling `progress` as data arrives.
-///
-/// `size` is the expected length in bytes, or `0` when it is unknown. The body
-/// is streamed to a temporary sibling of `dest` and moved into place once
-/// complete, so `dest` never holds a partial download. An interrupted download
-/// leaves that sibling behind; a later call resumes it with an HTTP `Range`
-/// request instead of starting over. Unless `force` is set, an existing `dest`
-/// is refused.
+/// Download `url` to `dest` via a `.part` sibling, resuming via HTTP `Range`.
 pub async fn download<F>(
     url: &str,
     size: u64,

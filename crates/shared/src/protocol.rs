@@ -1,11 +1,7 @@
 //! Wire format shared by the sidecar and its client.
 //!
-//! Messages are JSON objects in WebSocket text frames. The operation set is
-//! closed on purpose: unknown commands fail to deserialize instead of being
-//! forwarded to a shell or to the operating system.
-//!
-//! The values on the wire come from the crates that own them ([`catalog`],
-//! [`crate::fsx::Amount`]), so both sides agree without a second copy.
+//! The operation set is closed on purpose: unknown commands fail to deserialize
+//! instead of being forwarded to a shell or OS.
 
 use crate::fsx::Amount;
 use serde::{Deserialize, Serialize};
@@ -14,71 +10,33 @@ pub mod flash;
 
 use crate::protocol::flash::FlashPlan;
 
-/// A request from the unprivileged client.
-///
 /// Keep this enum small: every variant is code that runs as root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
-    /// Placeholder privileged operation: run the platform probe (`id`).
+    /// Placeholder privileged probe (`id`).
     Id,
-
-    /// Write the artifacts of `plan` to its target: the only operation that can
-    /// destroy data.
-    Flash {
-        /// Job to execute.
-        plan: FlashPlan,
-    },
-
-    /// Stop the helper.
+    Flash { plan: FlashPlan },
     Shutdown,
 }
 
-/// The helper's reply to a [`Request`].
-///
-/// A flash job replies with zero or more [`Reply::Progress`] frames, then exactly
-/// one [`Reply::Ok`] or [`Reply::Error`].
+/// A flash job replies with zero or more `Progress` frames, then one `Ok` or `Error`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Reply {
-    /// The operation succeeded.
-    Ok {
-        /// Captured standard output, or a human readable summary.
-        output: String,
-    },
-
-    /// The operation is still running, and has written `amount` so far.
-    Progress {
-        /// Bytes written so far and in total.
-        amount: Amount,
-    },
-
-    /// The operation failed.
-    Error {
-        /// Human readable failure reason.
-        message: String,
-    },
+    Ok { output: String },
+    Progress { amount: Amount },
+    Error { message: String },
 }
 
-/// Address and token the helper announces on stdout before accepting clients.
-///
-/// This is the first line of the helper's stdout; the client reads it and uses
-/// it to open the WebSocket connection.
+/// First line printed on helper stdout so the client can open the WebSocket.
 #[derive(Serialize, Deserialize)]
 pub struct Handshake {
-    /// `host:port` the helper listens on.
     pub address: String,
-
-    /// Per-run bearer token for the `token` query parameter.
     pub token: String,
 }
 
 impl Handshake {
-    /// WebSocket URL the client must connect to.
-    ///
-    /// Tokens are hex, so they never need percent-encoding here. The server
-    /// still parses the query with `form_urlencoded` because that side consumes
-    /// untrusted input.
     pub fn url(&self) -> String {
         format!("ws://{}/?token={}", self.address, self.token)
     }

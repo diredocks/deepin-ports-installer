@@ -1,15 +1,4 @@
-//! Filesystem primitives shared by the installer crates.
-//!
-//! Every crate in this workspace downloads, unpacks, verifies or writes files,
-//! and each one used to carry its own copy of the same few primitives: a
-//! temporary `.name.part` sibling moved into place with a single `rename`, a
-//! `(done, total)` progress pair, a 1 MiB streaming reader that reports it, a
-//! sorted directory listing and the `failed to read \`{path}\`` error pair.
-//! They live here so that the behaviour — not just the shape — is the same
-//! everywhere.
-//!
-//! Nothing here is asynchronous, spawns a process or touches the network. The
-//! crate depends on `std`, `serde` and `thiserror` only.
+//! Sync, network-free filesystem primitives shared across the workspace.
 
 pub mod amount;
 pub mod chunked;

@@ -41,8 +41,6 @@ where
     Ok(())
 }
 
-/// Compute the SHA-256 digest of `file`, reporting the number of bytes hashed
-/// so far.
 fn hash<F>(file: &Path, progress: F) -> Result<String>
 where
     F: FnMut(Amount),

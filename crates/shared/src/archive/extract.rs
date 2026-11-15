@@ -7,7 +7,6 @@ use crate::fsx::{Mode, Sibling};
 
 use crate::archive::{Error, Progress, Result};
 
-/// Compression applied to a tar archive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Compression {
     Tar,
@@ -15,8 +14,7 @@ enum Compression {
     Xz,
 }
 
-/// Archive suffixes this crate unpacks, longest first so `.tar.gz` wins over
-/// `.tar`.
+// Longest first so `.tar.gz` wins over `.tar`.
 const SUFFIXES: [(&str, Compression); 5] = [
     (".tar.xz", Compression::Xz),
     (".tar.gz", Compression::Gzip),
@@ -25,7 +23,6 @@ const SUFFIXES: [(&str, Compression); 5] = [
     (".tar", Compression::Tar),
 ];
 
-/// Split an archive file name into its stem and compression.
 fn split(name: &str) -> Option<(&str, Compression)> {
     let lower = name.to_ascii_lowercase();
     let (suffix, compression) = SUFFIXES
@@ -39,23 +36,14 @@ fn split(name: &str) -> Option<(&str, Compression)> {
     (!stem.is_empty()).then_some((stem, *compression))
 }
 
-/// The file name of `name` without its archive suffix, if it has one.
-///
-/// Shared with the manifest crawler so the images it publishes and the archives
-/// this crate unpacks agree on their suffixes.
 pub fn stem(name: &str) -> Option<&str> {
     split(name).map(|(stem, _)| stem)
 }
 
-/// Whether `name` names an archive this crate unpacks.
 pub fn is_archive(name: &str) -> bool {
     split(name).is_some()
 }
 
-/// A recognized tar archive.
-///
-/// Compression and the default extraction directory are derived from the file
-/// name once, in [`Archive::new`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Archive<'a> {
     path: &'a Path,
@@ -64,7 +52,6 @@ pub struct Archive<'a> {
 }
 
 impl<'a> Archive<'a> {
-    /// Recognize `path` as an archive this crate unpacks, or `None`.
     pub fn new(path: &'a Path) -> Option<Self> {
         let name = path.file_name()?.to_str()?;
         let (stem, compression) = split(name)?;
@@ -76,22 +63,15 @@ impl<'a> Archive<'a> {
         })
     }
 
-    /// Path of the archive.
     pub fn path(&self) -> &'a Path {
         self.path
     }
 
-    /// The default extraction directory: a sibling named after the archive with
-    /// the archive suffix removed.
     pub fn extraction_dir(&self) -> PathBuf {
         self.path.with_file_name(self.stem)
     }
 
-    /// Unpack into `destination`, replacing it when it exists.
-    ///
-    /// The archive is unpacked into a temporary sibling that is moved into place
-    /// once complete, so `destination` never holds a partial extraction. Members
-    /// outside `destination` are refused.
+    /// Unpack into `destination` atomically via a temporary sibling, rejecting escaping members.
     pub fn extract<F>(&self, destination: &Path, progress: F) -> Result<()>
     where
         F: FnMut(Progress),

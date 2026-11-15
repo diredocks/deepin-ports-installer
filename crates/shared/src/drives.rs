@@ -1,15 +1,7 @@
-//! Enumeration of local block devices usable as flash targets.
+//! Local block-device enumeration (modeled after balena's `drivelist`).
 //!
-//! The data model follows balena's [`drivelist`] package: every target carries
-//! enough information for a UI to describe it (vendor/model/labels, size, bus)
-//! and for the flash logic to decide whether it is safe to overwrite (system
-//! disk, read-only, removable).
-//!
-//! Linux enumeration shells out to `lsblk`, preferring its JSON output and
-//! falling back to the older `--pairs` format, exactly like `drivelist` does.
-//! Windows and macOS are scaffolded with [`todo!`] placeholders.
-//!
-//! [`drivelist`]: https://github.com/balena-io-modules/drivelist
+//! Linux shells out to `lsblk` (JSON with `--pairs` fallback); Windows and
+//! macOS are `todo!()` placeholders.
 
 pub use error::{Error, Result};
 
@@ -21,14 +13,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 mod error;
 mod platform;
 
-/// Partition table scheme found on a target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PartitionTable {
-    /// Master Boot Record (a.k.a. DOS) partition table.
     Mbr,
-
-    /// GUID Partition Table.
     Gpt,
 }
 
@@ -41,54 +29,31 @@ impl fmt::Display for PartitionTable {
     }
 }
 
-/// Discovery backend that produced a [`Target`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum Enumerator {
-    /// `lsblk --bytes --all --json --paths --output-all`.
     #[serde(rename = "lsblk:json")]
     LsblkJson,
 
-    /// `lsblk --bytes --all --pairs`, for `lsblk` builds without JSON output.
     #[serde(rename = "lsblk:pairs")]
     LsblkPairs,
 }
 
-/// Transport bus a [`Target`] is attached over.
-///
-/// `lsblk` reports this as `TRAN`; values outside the known set are kept
-/// verbatim in [`BusType::Unknown`] instead of being dropped.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BusType {
-    /// USB.
     Usb,
-
-    /// Serial ATA.
     Sata,
-
-    /// SCSI.
     Scsi,
-
-    /// Parallel ATA, reported by some old `lsblk` versions.
     Ata,
-
-    /// (E)IDE, reported by some old `lsblk` versions.
     Ide,
-
-    /// PCI/PCIe.
     Pci,
-
-    /// Any other transport, uppercased as `lsblk` was asked to report it.
     Unknown(String),
 }
 
 impl BusType {
-    /// The bus reported when the backend knows no transport at all.
     pub fn unreported() -> Self {
         BusType::Unknown("UNKNOWN".to_owned())
     }
 
-    /// Whether the bus carries SCSI style commands, mirroring `drivelist`'s
-    /// `isSCSI` flag.
     pub fn is_scsi(&self) -> bool {
         matches!(
             self,
@@ -96,7 +61,6 @@ impl BusType {
         )
     }
 
-    /// Whether the bus is USB, mirroring `drivelist`'s `isUSB` flag.
     pub fn is_usb(&self) -> bool {
         matches!(self, BusType::Usb)
     }
@@ -149,78 +113,50 @@ impl<'de> Deserialize<'de> for BusType {
     }
 }
 
-/// A mount point of a partition on a target.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Mountpoint {
-    /// Mount path, e.g. `/boot/efi` or `[SWAP]`.
     pub path: PathBuf,
 
-    /// Filesystem or partition label, when one is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }
 
-/// A local block device that can be used as a flash target.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Target {
-    /// Discovery backend that produced this target.
     pub enumerator: Enumerator,
-
-    /// Transport bus, e.g. [`BusType::Usb`] or [`BusType::unreported`].
     pub bus_type: BusType,
 
-    /// Bus protocol version; only reported by some platforms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bus_version: Option<String>,
 
-    /// Device node, e.g. `/dev/sdb`.
     pub device: PathBuf,
 
-    /// Stable `/dev/disk/by-path` link, when one exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_path: Option<PathBuf>,
 
-    /// Kernel device path, e.g. `/dev/sdb`.
     pub raw: PathBuf,
-
-    /// Human readable description built from labels, vendor and model.
     pub description: String,
 
-    /// Size in bytes, when the device size is known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
 
-    /// Physical block size in bytes.
     pub block_size: u64,
-
-    /// Logical block size in bytes.
     pub logical_block_size: u64,
 
-    /// Mount points of the target's partitions.
     #[serde(default)]
     pub mountpoints: Vec<Mountpoint>,
 
-    /// Whether the device is read-only.
     pub is_read_only: bool,
-
-    /// Whether this is the disk the running system lives on.
     pub is_system: bool,
-
-    /// Whether this is a virtual device (LVM, device mapper, ...).
     pub is_virtual: bool,
-
-    /// Whether the device can be removed while the system is running.
     pub is_removable: bool,
 
-    /// Whether this is an SD/MMC card; only reported on some platforms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_card: Option<bool>,
 
-    /// Whether the device uses USB Attached SCSI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_uas: Option<bool>,
 
-    /// Partition table scheme, when one was detected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partition_table: Option<PartitionTable>,
 }

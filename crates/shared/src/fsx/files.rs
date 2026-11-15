@@ -31,43 +31,31 @@ pub fn create_parents(destination: &Path) -> Result<()> {
     std::fs::create_dir_all(parent).map_err(|source| Error::write(parent, source))
 }
 
-/// Open `path` for reading.
 pub fn open(path: &Path) -> Result<File> {
     File::open(path).map_err(|source| Error::read(path, source))
 }
 
-/// Read the metadata of `path`.
 pub fn metadata(path: &Path) -> Result<std::fs::Metadata> {
     std::fs::metadata(path).map_err(|source| Error::read(path, source))
 }
 
-/// Read `path` into a string.
 pub fn read_to_string(path: &Path) -> Result<String> {
     std::fs::read_to_string(path).map_err(|source| Error::read(path, source))
 }
 
-/// Write `contents` to `path`, replacing whatever was there.
 pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
     std::fs::write(path, contents).map_err(|source| Error::write(path, source))
 }
 
-/// Every regular file directly inside `directory`, sorted by path.
-///
-/// Subdirectories are not descended into; use [`files_below`] for a tree.
 pub fn files_in(directory: &Path) -> Result<Vec<PathBuf>> {
     collect(directory, false)
 }
 
-/// Every regular file below `root`, sorted by path.
-///
-/// The walk starts at `root` itself and follows no symlinks: an entry counts as
-/// a directory only when its own file type says so.
+/// Every regular file below `root`, sorted by path (without following symlinks).
 pub fn files_below(root: &Path) -> Result<Vec<PathBuf>> {
     collect(root, true)
 }
 
-/// Walk `root`, collecting regular files, optionally descending into
-/// subdirectories.
 fn collect(root: &Path, recurse: bool) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut pending = vec![root.to_path_buf()];

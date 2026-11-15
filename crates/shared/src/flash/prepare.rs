@@ -9,28 +9,16 @@ use crate::fsx::Amount;
 use crate::flash::progress::{Phase, Progress};
 use crate::flash::{Error, Result};
 
-/// Settings for [`prepare`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PrepareOptions {
-    /// Unpack the archive again instead of reusing a previous extraction.
     pub force: bool,
-
-    /// Skip verification, accepting whatever the image contains.
     pub skip_verify: bool,
 }
 
-/// An image that is unpacked and verified, ready to be written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prepared {
-    /// Directory the artifacts live in.
     pub directory: PathBuf,
-
-    /// Artifacts found there, in flash order.
     pub artifacts: Vec<Artifact>,
-
-    /// Artifacts that were not hashed against a checksum manifest, in flash
-    /// order: those no manifest covered, or every one when
-    /// [`PrepareOptions::skip_verify`] is set.
     pub unverified: Vec<PathBuf>,
 }
 
@@ -41,18 +29,9 @@ pub struct Prepared {
 // needs an explicit source for published checksums — the image index is the
 // natural one — not a fixed list of probed URLs.
 
-/// Unpack and verify the image at `image`.
+/// Unpack (if an archive) and verify the image at `image`.
 ///
-/// An archive is unpacked into [`crate::archive::Archive::extraction_dir`] unless that
-/// directory exists, in which case the previous extraction is reused and
-/// verified again; [`PrepareOptions::force`] unpacks it from scratch. A plain
-/// image is used in place. Verification is driven by the manifests on disk: an
-/// artifact is hashed and compared when one covers it, a file a manifest lists
-/// is an [`Error::Missing`] when it is not there, and an artifact no manifest
-/// covers is an [`Error::Unverified`] — unless
-/// [`PrepareOptions::skip_verify`] is set, in which case nothing is hashed at
-/// all. Progress is reported through `progress`, one phase at a time. The
-/// network is never touched.
+/// Reuses an existing extraction unless `options.force` is set.
 pub fn prepare<F>(image: &Path, options: &PrepareOptions, mut progress: F) -> Result<Prepared>
 where
     F: FnMut(Progress),
@@ -65,19 +44,12 @@ where
     assemble(image, inputs, options, progress)
 }
 
-/// Files to inspect, and the manifests published next to them.
 struct Inputs {
-    /// Directory the files live in.
     directory: PathBuf,
-
-    /// Every regular file found there.
     files: Vec<PathBuf>,
-
-    /// Manifests among those files.
     manifests: Vec<Manifest>,
 }
 
-/// Unpack `archive`, unless the previous extraction is reused.
 fn unpack<F>(
     archive: &crate::archive::Archive<'_>,
     options: &PrepareOptions,

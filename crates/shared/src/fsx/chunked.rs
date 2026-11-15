@@ -1,17 +1,10 @@
-//! Reading a stream in chunks while reporting progress.
-
 use std::io::Read;
 
 use crate::fsx::Amount;
 
-/// Read buffer size used for streaming operations.
 pub const BUFFER_SIZE: usize = 1024 * 1024;
 
-/// A reader that reports how much of the stream has been consumed.
-///
-/// `total` is the expected length in bytes, when known; it only fills
-/// [`Amount::total`]. Every non-empty read reports the running total, so a
-/// caller can hash, copy or unpack the bytes it read and still report progress.
+/// `Read` adapter that reports cumulative bytes consumed via `progress`.
 #[derive(Debug)]
 pub struct Chunked<R, F> {
     inner: R,
@@ -21,7 +14,6 @@ pub struct Chunked<R, F> {
 }
 
 impl<R, F> Chunked<R, F> {
-    /// Report `progress` as `inner` is read, against an expected `total`.
     pub fn new(inner: R, total: Option<u64>, progress: F) -> Self {
         Self {
             inner,
