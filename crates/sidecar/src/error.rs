@@ -10,6 +10,12 @@ pub enum Error {
     #[error("sidecar I/O failed")]
     Io(#[source] std::io::Error),
 
+    #[error(transparent)]
+    Fs(#[from] shared::fsx::Error),
+
+    #[error("invalid flash plan: {0}")]
+    InvalidPlan(String),
+
     #[error("timed out waiting for the sidecar client")]
     Timeout,
 
