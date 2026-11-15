@@ -61,7 +61,7 @@ pub enum Command {
 
     /// Unpack and verify an image, then write it to a block device
     ///
-    /// The image must be downloaded first; writing is not implemented yet.
+    /// The image must be downloaded first.
     Flash(FlashArgs),
 }
 

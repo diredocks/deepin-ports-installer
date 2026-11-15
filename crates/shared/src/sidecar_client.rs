@@ -8,7 +8,6 @@
 //!
 //! # fn main() -> shared::sidecar_client::Result<()> {
 //! let mut client = Client::launch(LaunchOptions::new("/usr/lib/deepin-ports-installer/helper"))?;
-//! println!("{}", client.id()?);
 //! client.shutdown()?;
 //! # Ok(())
 //! # }

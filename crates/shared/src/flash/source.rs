@@ -28,6 +28,16 @@ pub enum Source {
     },
 }
 
+impl Source {
+    /// Path where the source image is stored locally (cached download path or local file).
+    pub fn cache_path(&self) -> crate::fetch::Result<PathBuf> {
+        match self {
+            Source::Remote { image, .. } => crate::fetch::download::destination(None, &image.link),
+            Source::Local { path, .. } => Ok(path.clone()),
+        }
+    }
+}
+
 /// Image filters, applied only when the source is a device model.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SourceOptions<'a> {

@@ -2,8 +2,6 @@
 //!
 //! The per-run token comes from the kernel CSPRNG.
 
-use std::process::Command;
-
 use crate::{Error, Result};
 
 /// Generate a 256 bit token from `/dev/urandom`, hex encoded.
@@ -22,19 +20,4 @@ pub(crate) fn random_token() -> Result<String> {
         let _ = write!(token, "{byte:02x}");
     }
     Ok(token)
-}
-
-/// Run the placeholder privileged command.
-///
-/// `pkexec` sanitizes the environment, so resolving `id` through `PATH` is not
-/// controlled by the unprivileged caller.
-pub(crate) fn id() -> Result<String> {
-    let output = Command::new("id")
-        .output()
-        .map_err(|source| Error::Command {
-            program: "id".to_owned(),
-            source,
-        })?;
-
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }

@@ -1,11 +1,11 @@
-//! Turning prepared artifacts into the job the privileged helper runs.
+//! Turning prepared artifacts into the job the privileged helper runs, and executing it.
 
 use std::path::Path;
 
 use crate::catalog::{Artifact, FlashVia, Role};
+use crate::flash::{Error, Phase, Prepared, Progress, Result, Source};
 use crate::protocol::FlashPlan;
-
-use crate::flash::{Error, Prepared, Result, Source};
+use crate::sidecar_client::{Client, LaunchOptions};
 
 /// Build the [`FlashPlan`] that writes `prepared` to `target`.
 ///
@@ -32,6 +32,24 @@ pub fn plan(
         target: target.to_path_buf(),
         artifacts: prepared.artifacts.clone(),
     })
+}
+
+impl FlashPlan {
+    /// Launch the privileged sidecar and execute this plan, reporting write progress.
+    pub fn execute<F>(&self, mut progress: F) -> Result<()>
+    where
+        F: FnMut(Progress),
+    {
+        let mut client = Client::launch(LaunchOptions::default())?;
+        let result = client.flash(self, |amount| {
+            progress(Progress {
+                phase: Phase::Write,
+                amount,
+            });
+        });
+        let _ = client.shutdown();
+        result.map_err(Into::into)
+    }
 }
 
 fn select_via(

@@ -37,6 +37,9 @@ pub enum Error {
 
     #[error("cannot infer write method from the prepared artifacts; specify `--via`")]
     MissingFlashVia,
+
+    #[error(transparent)]
+    Sidecar(#[from] crate::sidecar_client::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

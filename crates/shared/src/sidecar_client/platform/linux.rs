@@ -16,6 +16,13 @@ pub(crate) fn spawn(program: &Path, elevate: bool) -> Result<Child> {
     // SAFETY: `geteuid` has no preconditions and cannot fail.
     let elevate = elevate && unsafe { libc::geteuid() } != 0;
 
+    if elevate && let Err(source) = std::fs::metadata(program) {
+        return Err(Error::Spawn {
+            program: program.display().to_string(),
+            source,
+        });
+    }
+
     let launcher = if elevate {
         pkexec().ok_or(Error::ElevationUnavailable)?
     } else {

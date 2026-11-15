@@ -2,16 +2,23 @@
 
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 
 use tungstenite::stream::MaybeTlsStream;
 
 use super::platform;
-use crate::sidecar_client::{Error, Result};
 use crate::fsx::Amount;
 use crate::protocol::FlashPlan;
 use crate::protocol::{Handshake, Reply, Request};
+use crate::sidecar_client::{Error, Result};
+
+const HELPER_ENV: &str = "DEEPIN_PORTS_INSTALLER_HELPER";
+const HELPER_NAME: &str = "deepin-ports-installer-helper";
+const HELPER_SYSTEM_PATHS: &[&str] = &[
+    "/usr/libexec/deepin-ports-installer-helper",
+    "/usr/lib/deepin-ports-installer/deepin-ports-installer-helper",
+];
 
 /// How to start the sidecar.
 #[derive(Debug, Clone)]
@@ -34,12 +41,43 @@ impl LaunchOptions {
     }
 }
 
+impl Default for LaunchOptions {
+    fn default() -> Self {
+        Self::new(default_helper_path())
+    }
+}
+
+fn default_helper_path() -> PathBuf {
+    if let Some(path) = std::env::var_os(HELPER_ENV).filter(|value| !value.is_empty()) {
+        return PathBuf::from(path);
+    }
+
+    let binary_name = format!("{HELPER_NAME}{}", std::env::consts::EXE_SUFFIX);
+    let sibling = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(&binary_name)));
+
+    if let Some(path) = sibling.as_ref().filter(|path| path.is_file()) {
+        return path.clone();
+    }
+
+    if let Some(path) = HELPER_SYSTEM_PATHS
+        .iter()
+        .map(Path::new)
+        .find(|path| path.is_file())
+    {
+        return path.to_path_buf();
+    }
+
+    sibling.unwrap_or_else(|| PathBuf::from(binary_name))
+}
+
 /// An open session with a sidecar.
 ///
 /// Dropping the client closes the WebSocket, which makes the helper exit, and
 /// reaps the spawned process.
 pub struct Client {
-    child: Child,
+    child: Option<Child>,
     socket: tungstenite::WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
@@ -65,28 +103,10 @@ impl Client {
             }
         };
 
-        Ok(Self { child, socket })
-    }
-
-    /// Run `id` through the helper and return its stdout.
-    pub fn id(&mut self) -> Result<String> {
-        self.send(Request::Id)?;
-
-        loop {
-            let text = match self.socket.read().map_err(Error::WebSocket)? {
-                tungstenite::Message::Text(text) => text,
-                _ => continue,
-            };
-
-            return match serde_json::from_str::<Reply>(text.as_str())
-                .map_err(|err| Error::Protocol(format!("invalid reply: {err}")))?
-            {
-                Reply::Ok { output } => Ok(output),
-                Reply::Error { message } => Err(Error::Reported(message)),
-                // `id` never reports progress; skip the frame.
-                Reply::Progress { .. } => continue,
-            };
-        }
+        Ok(Self {
+            child: Some(child),
+            socket,
+        })
     }
 
     /// Ask the helper to stop.
@@ -95,13 +115,19 @@ impl Client {
     }
 
     /// Run a flash job through the helper, reporting its progress.
-    ///
-    /// TODO(flash): send `Request::Flash` and map progress frames onto `progress`.
-    pub fn flash<F>(&mut self, _plan: &FlashPlan, _progress: F) -> Result<()>
+    pub fn flash<F>(&mut self, plan: &FlashPlan, mut progress: F) -> Result<()>
     where
         F: FnMut(Amount),
     {
-        todo!("stream flash progress from the helper")
+        self.send(Request::Flash { plan: plan.clone() })?;
+
+        loop {
+            match self.recv()? {
+                Reply::Progress { amount } => progress(amount),
+                Reply::Ok => return Ok(()),
+                Reply::Error { message } => return Err(Error::Reported(message)),
+            }
+        }
     }
 
     fn send(&mut self, request: Request) -> Result<()> {
@@ -109,6 +135,23 @@ impl Client {
         self.socket
             .send(tungstenite::Message::Text(json.into()))
             .map_err(Error::WebSocket)
+    }
+
+    fn recv(&mut self) -> Result<Reply> {
+        loop {
+            match self.socket.read().map_err(Error::WebSocket)? {
+                tungstenite::Message::Text(text) => {
+                    return serde_json::from_str::<Reply>(text.as_str())
+                        .map_err(|err| Error::Protocol(format!("invalid reply: {err}")));
+                }
+                tungstenite::Message::Close(_) => {
+                    return Err(Error::Protocol(
+                        "sidecar closed the connection before replying".to_owned(),
+                    ));
+                }
+                _ => continue,
+            }
+        }
     }
 }
 
@@ -118,7 +161,9 @@ impl Drop for Client {
         // on its own, even when the spawned process is only the elevator.
         let _ = self.socket.close(None);
         let _ = self.socket.flush();
-        stop(&mut self.child);
+        if let Some(child) = self.child.as_mut() {
+            stop(child);
+        }
     }
 }
 
@@ -140,4 +185,105 @@ fn read_handshake(child: &mut Child) -> Result<Handshake> {
 fn stop(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, TcpListener};
+    use std::thread;
+
+    use crate::catalog::{Artifact, FlashVia, Role};
+
+    use super::*;
+
+    fn sample_plan() -> FlashPlan {
+        FlashPlan {
+            via: FlashVia::DdWhole,
+            target: PathBuf::from("/dev/sdb"),
+            artifacts: vec![Artifact {
+                path: PathBuf::from("/tmp/disk.img"),
+                role: Role::Disk,
+                size: 1024,
+            }],
+        }
+    }
+
+    fn spawn_mock_server(replies: Vec<Reply>) -> (Client, thread::JoinHandle<Request>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut ws = tungstenite::accept(stream).unwrap();
+
+            let msg = ws.read().unwrap();
+            let request: Request = serde_json::from_str(msg.to_text().unwrap()).unwrap();
+
+            for reply in replies {
+                let json = serde_json::to_string(&reply).unwrap();
+                ws.send(tungstenite::Message::Text(json.into())).unwrap();
+            }
+            let _ = ws.close(None);
+            let _ = ws.flush();
+
+            request
+        });
+
+        let (socket, _) = tungstenite::connect(format!("ws://{addr}/")).unwrap();
+        let client = Client {
+            child: None,
+            socket,
+        };
+        (client, server)
+    }
+
+    #[test]
+    fn streams_flash_progress_until_ok() {
+        let replies = vec![
+            Reply::Progress {
+                amount: Amount::new(512, Some(1024)),
+            },
+            Reply::Progress {
+                amount: Amount::new(1024, Some(1024)),
+            },
+            Reply::Ok,
+        ];
+        let (mut client, server) = spawn_mock_server(replies);
+        let plan = sample_plan();
+
+        let mut reports = Vec::new();
+        client.flash(&plan, |amount| reports.push(amount)).unwrap();
+
+        assert_eq!(
+            reports,
+            [
+                Amount::new(512, Some(1024)),
+                Amount::new(1024, Some(1024)),
+            ]
+        );
+        assert_eq!(server.join().unwrap(), Request::Flash { plan });
+    }
+
+    #[test]
+    fn returns_reported_error_from_helper() {
+        let replies = vec![
+            Reply::Progress {
+                amount: Amount::new(256, Some(1024)),
+            },
+            Reply::Error {
+                message: "permission denied".to_owned(),
+            },
+        ];
+        let (mut client, server) = spawn_mock_server(replies);
+        let plan = sample_plan();
+
+        let mut reports = Vec::new();
+        let err = client
+            .flash(&plan, |amount| reports.push(amount))
+            .unwrap_err();
+
+        assert_eq!(reports, [Amount::new(256, Some(1024))]);
+        assert!(matches!(err, Error::Reported(msg) if msg == "permission denied"));
+        assert_eq!(server.join().unwrap(), Request::Flash { plan });
+    }
 }

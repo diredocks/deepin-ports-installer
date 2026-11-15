@@ -17,3 +17,4 @@ pub use progress::{Phase, Progress};
 pub use source::{Source, SourceOptions, remote, resolve};
 
 pub use crate::catalog::{Artifact, Role};
+pub use crate::protocol::FlashPlan;

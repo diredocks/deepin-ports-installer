@@ -52,7 +52,9 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     print_source(&source);
     println!("target: {}", args.target.display());
 
-    let downloaded = source_path(&source)?;
+    let downloaded = source
+        .cache_path()
+        .context("failed to resolve the download destination")?;
 
     if args.dry_run {
         print_preparation(&downloaded);
@@ -94,20 +96,16 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
         .context("failed to plan the flash job")?;
     println!("via: {}", plan.via);
 
-    // TODO(privileged): launch the sidecar and stream `plan` progress.
-    todo!(
-        "writing images to block devices is not implemented yet; the artifacts are prepared in {}",
-        prepared.directory.display()
-    )
-}
+    let bar = render::prepare_bar(quiet);
+    let result = plan.execute(|progress| {
+        render::prepare_progress(&bar, &progress);
+    });
+    bar.finish_and_clear();
+    result.context("failed to write the image to the target device")?;
 
-/// Where the image the source names is, or will be, cached.
-fn source_path(source: &Source) -> Result<PathBuf> {
-    match source {
-        Source::Remote { image, .. } => download::destination(None, &image.link)
-            .context("failed to resolve the download destination"),
-        Source::Local { path, .. } => Ok(path.clone()),
-    }
+    log::info!("wrote {}", plan.target.display());
+
+    Ok(())
 }
 
 fn print_source(source: &Source) {

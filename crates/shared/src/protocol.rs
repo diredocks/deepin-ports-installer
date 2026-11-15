@@ -29,8 +29,6 @@ pub struct FlashPlan {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
-    /// Placeholder privileged probe (`id`).
-    Id,
     Flash { plan: FlashPlan },
     Shutdown,
 }
@@ -39,7 +37,7 @@ pub enum Request {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Reply {
-    Ok { output: String },
+    Ok,
     Progress { amount: Amount },
     Error { message: String },
 }
@@ -63,10 +61,6 @@ mod tests {
 
     #[test]
     fn requests_are_flat_and_closed() {
-        assert_eq!(
-            serde_json::to_value(Request::Id).unwrap(),
-            serde_json::json!({ "op": "id" })
-        );
         assert_eq!(
             serde_json::to_value(Request::Shutdown).unwrap(),
             serde_json::json!({ "op": "shutdown" })
@@ -94,13 +88,9 @@ mod tests {
 
     #[test]
     fn replies_are_flat() {
-        let reply = Reply::Ok {
-            output: "uid=0(root)\n".into(),
-        };
-
         assert_eq!(
-            serde_json::to_value(&reply).unwrap(),
-            serde_json::json!({ "status": "ok", "output": "uid=0(root)\n" })
+            serde_json::to_value(&Reply::Ok).unwrap(),
+            serde_json::json!({ "status": "ok" })
         );
 
         let progress = Reply::Progress {

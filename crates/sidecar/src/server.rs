@@ -103,36 +103,46 @@ async fn handle_request(socket: &mut WebSocketStream<TcpStream>, text: &str) -> 
         .map_err(|err| Error::Protocol(format!("invalid request: {err}")))?;
 
     match request {
-        Request::Id => {
-            let reply = match platform::id() {
-                Ok(output) => Reply::Ok { output },
-                Err(err) => Reply::Error {
-                    message: err.to_string(),
-                },
-            };
-            let json = serde_json::to_string(&reply)?;
-            socket
-                .send(Message::Text(json.into()))
-                .await
-                .map_err(Error::WebSocket)?;
-            Ok(false)
-        }
         Request::Flash { plan } => {
-            handle_flash(socket, &plan).await?;
+            handle_flash(socket, plan).await?;
             Ok(false)
         }
         Request::Shutdown => Ok(true),
     }
 }
 
-/// Run a flash job, streaming its progress to the client.
-///
-/// TODO(flash): forward the driver's synchronous reports through a channel, then
-/// reply with `Reply::Ok` or `Reply::Error`.
-async fn handle_flash(_socket: &mut WebSocketStream<TcpStream>, plan: &FlashPlan) -> Result<()> {
-    driver::write(plan, &mut |_progress| {})?;
+async fn send_reply(socket: &mut WebSocketStream<TcpStream>, reply: &Reply) -> Result<()> {
+    let json = serde_json::to_string(reply)?;
+    socket
+        .send(Message::Text(json.into()))
+        .await
+        .map_err(Error::WebSocket)
+}
 
-    todo!("send the job's outcome back to the client")
+/// Run a flash job, streaming its progress to the client.
+async fn handle_flash(socket: &mut WebSocketStream<TcpStream>, plan: FlashPlan) -> Result<()> {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let worker = std::thread::spawn(move || {
+        driver::write(&plan, &mut |amount| {
+            let _ = tx.send(amount);
+        })
+    });
+
+    while let Some(amount) = rx.recv().await {
+        send_reply(socket, &Reply::Progress { amount }).await?;
+    }
+
+    let reply = match worker.join() {
+        Ok(Ok(())) => Reply::Ok,
+        Ok(Err(err)) => Reply::Error {
+            message: err.to_string(),
+        },
+        Err(_) => Reply::Error {
+            message: "flash driver panicked".to_owned(),
+        },
+    };
+
+    send_reply(socket, &reply).await
 }
 
 /// Whether the WebSocket request carries the expected token.
@@ -188,35 +198,115 @@ mod tests {
     }
 
     #[test]
-    fn serves_id_and_stops_on_shutdown() {
-        let (handshake, server) = start();
-        let mut socket = connect(&handshake);
-
-        socket
-            .send(Message::Text(
-                serde_json::to_string(&Request::Id).unwrap().into(),
-            ))
-            .unwrap();
-        let reply: Reply = serde_json::from_str(socket.read().unwrap().to_text().unwrap()).unwrap();
-        match reply {
-            Reply::Ok { output } => assert!(output.contains("uid="), "{output}"),
-            other => panic!("unexpected reply: {other:?}"),
-        }
-
-        socket
-            .send(Message::Text(
-                serde_json::to_string(&Request::Shutdown).unwrap().into(),
-            ))
-            .unwrap();
-        server.join().unwrap().unwrap();
-    }
-
-    #[test]
     fn rejects_a_missing_token() {
         let (handshake, server) = start();
         let url = format!("ws://{}/", handshake.address);
 
         assert!(tungstenite::connect(url).is_err());
         assert!(server.join().unwrap().is_err());
+    }
+
+    struct TestDir {
+        path: std::path::PathBuf,
+    }
+
+    impl TestDir {
+        fn new(name: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "deepin-ports-sidecar-server-{}-{name}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).expect("create test directory");
+            Self { path }
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn send_request(socket: &mut Socket, request: &Request) {
+        socket
+            .send(Message::Text(
+                serde_json::to_string(request).unwrap().into(),
+            ))
+            .unwrap();
+    }
+
+    fn read_reply(socket: &mut Socket) -> Reply {
+        serde_json::from_str(socket.read().unwrap().to_text().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn streams_flash_progress_and_finishes_with_ok() {
+        let dir = TestDir::new("flash-ok");
+        let image = dir.path.join("disk.img");
+        let target = dir.path.join("target.bin");
+        let payload = b"whole-disk-payload";
+        std::fs::write(&image, payload).unwrap();
+        std::fs::write(&target, vec![0u8; payload.len()]).unwrap();
+
+        let (handshake, server) = start();
+        let mut socket = connect(&handshake);
+
+        let plan = FlashPlan {
+            via: shared::catalog::FlashVia::DdWhole,
+            target: target.clone(),
+            artifacts: vec![shared::catalog::Artifact {
+                path: image,
+                role: shared::catalog::Role::Disk,
+                size: payload.len() as u64,
+            }],
+        };
+        send_request(&mut socket, &Request::Flash { plan });
+
+        let mut progress = Vec::new();
+        loop {
+            match read_reply(&mut socket) {
+                Reply::Progress { amount } => progress.push(amount),
+                Reply::Ok => break,
+                other => panic!("unexpected reply: {other:?}"),
+            }
+        }
+
+        assert_eq!(
+            progress.last(),
+            Some(&shared::fsx::Amount::new(
+                payload.len() as u64,
+                Some(payload.len() as u64)
+            ))
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), payload);
+
+        send_request(&mut socket, &Request::Shutdown);
+        server.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn returns_error_reply_for_invalid_flash_plan_and_stays_alive() {
+        let dir = TestDir::new("flash-err");
+        let target = dir.path.join("target.bin");
+        std::fs::write(&target, b"placeholder").unwrap();
+
+        let (handshake, server) = start();
+        let mut socket = connect(&handshake);
+
+        let plan = FlashPlan {
+            via: shared::catalog::FlashVia::DdWhole,
+            target,
+            artifacts: Vec::new(),
+        };
+        send_request(&mut socket, &Request::Flash { plan });
+
+        match read_reply(&mut socket) {
+            Reply::Error { message } => assert!(!message.is_empty()),
+            other => panic!("unexpected reply: {other:?}"),
+        }
+
+        send_request(&mut socket, &Request::Shutdown);
+        server.join().unwrap().unwrap();
     }
 }
