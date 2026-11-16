@@ -19,7 +19,7 @@ pub enum FlashVia {
     /// Write the boot medium through `rkdeveloptool` in MaskROM mode.
     Rkdeveloptool,
 
-    /// Write a bootable ISO to removable media.
+    /// Write a bootable ISO to removable media as a whole disk image.
     IsoWrite,
 }
 

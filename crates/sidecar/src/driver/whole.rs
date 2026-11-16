@@ -2,6 +2,11 @@
 //!
 //! jh7110 (VisionFive 2, MilkV Mars, DC ROMA) and phytiumpi ship one `*.img` that
 //! already carries the partition table and the bootloader.
+//!
+//! Also backs `iso-write`: the generic group (QEMU, MilkV Titan, UltraRISC
+//! DP1000, Sophgo SG2044) ships one `*.iso` that boots as it is. RISC-V boards
+//! cannot boot a Ventoy stick, so the medium is written directly — the same
+//! whole-disk stream, from offset 0.
 
 use shared::catalog::{Artifact, Role};
 use shared::fsx::{self, Amount, BUFFER_SIZE};
@@ -63,13 +68,13 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
 
 fn disk_artifact(artifacts: &[Artifact]) -> Result<&Artifact> {
     match artifacts {
-        [artifact] if artifact.role == Role::Disk => Ok(artifact),
+        [artifact] if matches!(artifact.role, Role::Disk | Role::Iso) => Ok(artifact),
         [artifact] => Err(Error::InvalidPlan(format!(
-            "dd-whole expects a disk artifact, got {}",
+            "dd-whole expects a disk or ISO artifact, got {}",
             artifact.role
         ))),
         artifacts => Err(Error::InvalidPlan(format!(
-            "dd-whole expects 1 disk artifact, got {}",
+            "dd-whole expects 1 disk or ISO artifact, got {}",
             artifacts.len()
         ))),
     }
@@ -158,6 +163,25 @@ mod tests {
             Some(&Amount::new(payload.len() as u64, Some(payload.len() as u64)))
         );
         assert!(reports.windows(2).all(|w| w[0].done < w[1].done));
+    }
+
+    #[tokio::test]
+    async fn writes_an_iso_like_a_whole_disk() {
+        let dir = TestDir::new("write-iso");
+        let image_path = dir.join("image.iso");
+        let target_path = dir.join("target.bin");
+        let payload = b"bootable iso";
+        fs::write(&image_path, payload).unwrap();
+        fs::write(&target_path, vec![0u8; payload.len()]).unwrap();
+
+        let job = plan(
+            &target_path,
+            vec![artifact(&image_path, Role::Iso, payload.len() as u64)],
+        );
+
+        write(&job, |_| {}).await.unwrap();
+
+        assert_eq!(fs::read(&target_path).unwrap(), payload);
     }
 
     #[tokio::test]

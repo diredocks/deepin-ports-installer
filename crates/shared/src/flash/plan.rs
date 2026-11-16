@@ -11,7 +11,7 @@ use crate::sidecar_client::{Client, LaunchOptions};
 ///
 /// When `via` is provided and `source` lists allowed `flash_via` methods, `via`
 /// must be one of them. Otherwise, `via` defaults to the first listed method,
-/// or is inferred from a single whole-disk/ISO artifact.
+/// or is inferred from a single whole-disk image or ISO.
 pub fn plan(
     source: &Source,
     prepared: &Prepared,
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn infers_write_method_for_local_whole_disk_and_iso() {
+    fn infers_the_write_method_for_local_whole_disk_and_iso() {
         let source = local_source();
 
         let disk_plan = plan(
