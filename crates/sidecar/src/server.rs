@@ -5,8 +5,10 @@
 //! token on stdout, and serves the closed set of operations in
 //! [`shared::protocol::Request`].
 
+use std::future::Future;
 use std::io::{self, Write};
 use std::net::Ipv4Addr;
+use std::pin::pin;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -21,6 +23,7 @@ use tungstenite::http::{Response as HttpResponse, StatusCode};
 use crate::driver;
 use crate::platform;
 use crate::{Error, Result};
+use shared::fsx::Amount;
 use shared::protocol::FlashPlan;
 use shared::protocol::{Handshake, Reply, Request};
 
@@ -103,10 +106,7 @@ async fn handle_request(socket: &mut WebSocketStream<TcpStream>, text: &str) -> 
         .map_err(|err| Error::Protocol(format!("invalid request: {err}")))?;
 
     match request {
-        Request::Flash { plan } => {
-            handle_flash(socket, plan).await?;
-            Ok(false)
-        }
+        Request::Flash { plan } => handle_flash(socket, plan).await,
         Request::Shutdown => Ok(true),
     }
 }
@@ -120,29 +120,62 @@ async fn send_reply(socket: &mut WebSocketStream<TcpStream>, reply: &Reply) -> R
 }
 
 /// Run a flash job, streaming its progress to the client.
-async fn handle_flash(socket: &mut WebSocketStream<TcpStream>, plan: FlashPlan) -> Result<()> {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let worker = std::thread::spawn(move || {
-        driver::write(&plan, &mut |amount| {
+async fn handle_flash(socket: &mut WebSocketStream<TcpStream>, plan: FlashPlan) -> Result<bool> {
+    let (tx, rx) = tokio::sync::watch::channel(Amount::default());
+    drive_flash(
+        socket,
+        rx,
+        driver::write(&plan, |amount| {
             let _ = tx.send(amount);
-        })
-    });
+        }),
+    )
+    .await
+}
 
-    while let Some(amount) = rx.recv().await {
+async fn drive_flash(
+    socket: &mut WebSocketStream<TcpStream>,
+    mut rx: tokio::sync::watch::Receiver<Amount>,
+    write: impl Future<Output = Result<()>>,
+) -> Result<bool> {
+    let mut write = pin!(write);
+    let mut progress_open = true;
+
+    let outcome = loop {
+        tokio::select! {
+            result = &mut write => break result,
+            changed = rx.changed(), if progress_open => {
+                match changed {
+                    Ok(()) => {
+                        let amount = *rx.borrow_and_update();
+                        send_reply(socket, &Reply::Progress { amount }).await?;
+                    }
+                    Err(_) => progress_open = false,
+                }
+            }
+            incoming = socket.next() => {
+                match incoming {
+                    Some(Ok(Message::Close(_))) | None => return Ok(true),
+                    Some(Err(err)) => return Err(Error::WebSocket(err)),
+                    Some(Ok(_)) => {}
+                }
+            }
+        }
+    };
+
+    if rx.has_changed().unwrap_or(false) {
+        let amount = *rx.borrow_and_update();
         send_reply(socket, &Reply::Progress { amount }).await?;
     }
 
-    let reply = match worker.join() {
-        Ok(Ok(())) => Reply::Ok,
-        Ok(Err(err)) => Reply::Error {
+    let reply = match outcome {
+        Ok(()) => Reply::Ok,
+        Err(err) => Reply::Error {
             message: err.to_string(),
-        },
-        Err(_) => Reply::Error {
-            message: "flash driver panicked".to_owned(),
         },
     };
 
-    send_reply(socket, &reply).await
+    send_reply(socket, &reply).await?;
+    Ok(false)
 }
 
 /// Whether the WebSocket request carries the expected token.
@@ -308,5 +341,77 @@ mod tests {
 
         send_request(&mut socket, &Request::Shutdown);
         server.join().unwrap().unwrap();
+    }
+
+    fn run_disconnect_case(close_cleanly: bool) -> (Result<bool>, bool) {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct DropFlag(Arc<AtomicBool>);
+
+        impl Drop for DropFlag {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Relaxed);
+            }
+        }
+
+        let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let handshake = Handshake {
+            address: listener.local_addr().unwrap().to_string(),
+            token: "test-token".into(),
+        };
+        let token = handshake.token.clone();
+
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker_cancelled = Arc::clone(&cancelled);
+
+        let server = thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    let listener = TcpListener::from_std(listener).unwrap();
+                    let mut socket = accept_client(listener, &token).await?;
+                    let (tx, rx) = tokio::sync::watch::channel(Amount::default());
+                    let write = async move {
+                        let _guard = DropFlag(worker_cancelled);
+                        let _ = tx.send(Amount::new(1, Some(2)));
+                        std::future::pending::<Result<()>>().await
+                    };
+                    drive_flash(&mut socket, rx, write).await
+                })
+        });
+
+        let mut client = connect(&handshake);
+        assert!(matches!(
+            read_reply(&mut client),
+            Reply::Progress { amount } if amount == Amount::new(1, Some(2))
+        ));
+
+        if close_cleanly {
+            client.close(None).unwrap();
+            client.flush().unwrap();
+        } else {
+            drop(client);
+        }
+
+        let outcome = server.join().unwrap();
+        (outcome, cancelled.load(Ordering::Relaxed))
+    }
+
+    #[test]
+    fn cancels_flash_when_client_closes_cleanly() {
+        let (outcome, cancelled) = run_disconnect_case(true);
+        assert!(outcome.unwrap());
+        assert!(cancelled);
+    }
+
+    #[test]
+    fn cancels_flash_when_client_drops_connection() {
+        let (outcome, cancelled) = run_disconnect_case(false);
+        assert!(matches!(outcome, Err(Error::WebSocket(_))));
+        assert!(cancelled);
     }
 }

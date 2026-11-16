@@ -15,12 +15,12 @@ mod rkdeveloptool;
 mod whole;
 
 /// Write every artifact of `plan` with the driver for `plan.via`.
-pub(crate) fn write(plan: &FlashPlan, progress: &mut dyn FnMut(Amount)) -> Result<()> {
+pub(crate) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
     match plan.via {
-        shared::catalog::FlashVia::DdWhole => whole::write(plan, progress),
-        shared::catalog::FlashVia::DdPartitions => partitions::write(plan, progress),
-        shared::catalog::FlashVia::Fastboot => fastboot::write(plan, progress),
-        shared::catalog::FlashVia::Rkdeveloptool => rkdeveloptool::write(plan, progress),
-        shared::catalog::FlashVia::IsoWrite => iso::write(plan, progress),
+        shared::catalog::FlashVia::DdWhole => whole::write(plan, &mut progress).await,
+        shared::catalog::FlashVia::DdPartitions => partitions::write(plan, &mut progress).await,
+        shared::catalog::FlashVia::Fastboot => fastboot::write(plan, &mut progress).await,
+        shared::catalog::FlashVia::Rkdeveloptool => rkdeveloptool::write(plan, &mut progress).await,
+        shared::catalog::FlashVia::IsoWrite => iso::write(plan, &mut progress).await,
     }
 }

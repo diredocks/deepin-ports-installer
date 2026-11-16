@@ -9,6 +9,6 @@ use shared::protocol::FlashPlan;
 
 use crate::Result;
 
-pub(super) fn write(_plan: &FlashPlan, _progress: &mut dyn FnMut(Amount)) -> Result<()> {
+pub(super) async fn write(_plan: &FlashPlan, _progress: impl FnMut(Amount)) -> Result<()> {
     todo!("write a bootable ISO to removable media")
 }
