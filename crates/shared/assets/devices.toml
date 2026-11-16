@@ -1,3 +1,4 @@
+# NOTE: tested with milkv-mars
 [[devices]]
 arch = "riscv"
 platform = "sifive-u74"
@@ -27,6 +28,7 @@ links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/eic7700",
 ]
 flash_via = ["dd-partitions", "fastboot"]
+partition_scheme = "boot+root"
 
 [[devices]]
 arch = "riscv"
@@ -40,6 +42,7 @@ links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/sg2042",
 ]
 flash_via = ["dd-partitions"]
+# TODO: partition_scheme = # bl in sd/mtd sys in nvme lol
 
 [[devices]]
 arch = "riscv"
@@ -52,7 +55,9 @@ links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/sg2044",
 ]
 flash_via = ["dd-partitions"]
+# TODO: partition_scheme = 
 
+# TODO: milkv-meles
 [[devices]]
 arch = "riscv"
 platform = "xiuantie-c910"
@@ -60,12 +65,14 @@ soc = "th1520"
 devices = [
     "t-head-light-a",
     "licheepi-4a",
+    "milkv-meles"
 ]
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/th1520",
 ]
 flash_via = ["fastboot"]
 
+# TODO: k1
 [[devices]]
 arch = "riscv"
 platform = "spacemit-x60"
@@ -135,7 +142,9 @@ links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/q6a",
 ]
 flash_via = ["dd-partitions"]
+partition_scheme = "efi+root"
 
+# TODO: dshanpi-a1
 [[devices]]
 arch = "arm64"
 platform = "rockchip"
@@ -151,6 +160,7 @@ links = [
 ]
 flash_via = ["rkdeveloptool"]
 
+# TODO: a7z
 [[devices]]
 arch = "arm64"
 platform = "allwinner"
@@ -163,3 +173,4 @@ links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/a733",
 ]
 flash_via = ["dd-partitions"]
+partition_scheme = "root"

@@ -1,0 +1,69 @@
+[[schemes]]
+type = "efi+root"
+table = "gpt"
+# sector = 512
+# sector = 4096
+[[schemes.partitions]]
+id = "efi"
+type = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
+size = 67_108_864
+[[schemes.partitions]]
+id = "root"
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+
+[[schemes]]
+type = "efi+boot+root"
+table = "gpt"
+# sector = 512
+[[schemes.partitions]]
+id = "efi"
+type = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
+size = 67_108_864
+[[schemes.partitions]]
+id = "boot"
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+[[schemes.partitions]]
+id = "root"
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+
+[[schemes]]
+type = "boot+root"
+table = "gpt"
+# sector = 512
+[[schemes.partitions]]
+id = "boot"
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+[[schemes.partitions]]
+id = "root"
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+
+[[schemes]]
+type = "root"
+table = "gpt"
+# sector = 512
+[[schemes.partitions]]
+id = "root"
+offset = 65_536
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+
+[[schemes]]
+type = "spl+uboot+boot+root"
+table = "gpt"
+# sector = 512
+[[schemes.partitions]]
+id = "spl"
+type = "2E54B353-1271-4842-806F-E436D6AF6985"
+size = 2_097_152
+offset = 2_097_152
+[[schemes.partitions]]
+id = "uboot"
+type = "5B193300-FC78-40CD-8002-E86C45580B47"
+size = 4_194_304
+offset = 4_194_304
+[[schemes.partitions]]
+id = "boot"
+type = "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7"
+offset = 8_388_608
+[[schemes.partitions]]
+id = "root"
+type = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
