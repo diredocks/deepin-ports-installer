@@ -1,14 +1,12 @@
-//! `dd-partitions`: lay out a partition table, then write each partition image.
+//! Partitioned block-device writes (`dd-boot-root`, `dd-efi-root`, `dd-root`, `dd-a733`):
+//! lay out a partition table, then write each partition image (and any extra bootloader).
 //!
-//! eic7700 (SD, SATA, NVMe), sg2042, sg2044, q6a, rockchip (SD, NVMe) and a733
-//! ship partition images rather than a whole disk.
-//!
-//! | Devices | Layout |
-//! |---|---|
-//! | eic7700 | `p1` boot (~2G) + `p2` root (rest) |
-//! | q6a | `p1` EFI (>=256M) + `p2` root |
-//! | sg2042, sg2044, rockchip | a single partition holding the root image |
-//! | a733 | a single partition that must start at sector 65536 |
+//! | Method | Devices | Layout |
+//! |---|---|---|
+//! | `dd-boot-root` | eic7700 (SD, SATA, NVMe) | `p1` boot (~2G) + `p2` root (rest) |
+//! | `dd-efi-root` | qcom | `p1` EFI (>=256M) + `p2` root |
+//! | `dd-root` | sg2042, sg2044, rockchip (SD, NVMe) | a single partition holding the root image |
+//! | `dd-a733` | a733 | U-Boot + a single `root` partition starting at sector 65536 |
 
 use shared::fsx::Amount;
 use shared::protocol::FlashPlan;

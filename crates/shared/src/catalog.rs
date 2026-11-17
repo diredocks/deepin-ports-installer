@@ -60,6 +60,10 @@ pub enum Error {
     /// An architecture slug is not one of the known values.
     #[error("unknown architecture `{0}`")]
     UnknownArch(String),
+
+    /// An artifact role slug is not one of the known values.
+    #[error("unknown artifact role `{0}`")]
+    UnknownRole(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -1,12 +1,13 @@
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use anyhow::{Context, Result, bail, ensure};
 use clap::Args;
 use humansize::{BINARY, format_size};
 use shared::archive::Archive;
-use shared::catalog::{FlashVia, date};
+use shared::catalog::{FlashVia, Role, date};
 use shared::fetch::download;
-use shared::flash::{PrepareOptions, Prepared, Source, SourceOptions};
+use shared::flash::{FlashPlan, PrepareOptions, Prepared, Source, SourceOptions};
 
 use crate::cli::ImageFilterArgs;
 use crate::render;
@@ -31,6 +32,10 @@ pub struct FlashArgs {
     #[arg(long, value_enum)]
     pub via: Option<FlashVia>,
 
+    /// Extra file required by the write method (repeatable, e.g. --extra uboot=/path/to/u-boot.bin)
+    #[arg(long = "extra", value_name = "ROLE=PATH", value_parser = parse_extra)]
+    pub extras: Vec<(Role, PathBuf)>,
+
     /// Unpack the archive again even when an extraction is cached
     #[arg(short, long)]
     pub force: bool,
@@ -42,6 +47,27 @@ pub struct FlashArgs {
     /// Print the resolved source, target and extraction directory without preparing anything
     #[arg(short = 'n', long)]
     pub dry_run: bool,
+}
+
+fn parse_extra(spec: &str) -> std::result::Result<(Role, PathBuf), String> {
+    let (role, path) = spec
+        .split_once('=')
+        .ok_or_else(|| format!("invalid `--extra` value `{spec}`; expected `ROLE=PATH`"))?;
+
+    if path.is_empty() {
+        return Err(format!(
+            "invalid `--extra` value `{spec}`; missing file path after `=`"
+        ));
+    }
+
+    let role = Role::from_str(role.trim()).map_err(|err| err.to_string())?;
+    if !role.is_extra() {
+        return Err(format!(
+            "`{role}` is not a user-supplied extra role; expected one of loader, gpt, bootinfo, fsbl, env, opensbi, uboot"
+        ));
+    }
+
+    Ok((role, PathBuf::from(path)))
 }
 
 pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
@@ -58,6 +84,9 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     if args.dry_run {
         print_preparation(&downloaded);
+        for (role, path) in &args.extras {
+            println!("extra: {} ({role})", path.display());
+        }
         return Ok(());
     }
 
@@ -92,9 +121,10 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
 
     print_prepared(&prepared);
 
-    let plan = shared::flash::plan(&source, &prepared, args.via, &args.target)
+    let plan = shared::flash::plan(&source, &prepared, &args.extras, args.via, &args.target)
         .context("failed to plan the flash job")?;
     println!("via: {}", plan.via);
+    print_plan_extras(&plan);
 
     let bar = render::prepare_bar(quiet);
     let result = plan.execute(|progress| {
@@ -153,5 +183,18 @@ fn print_prepared(prepared: &Prepared) {
             artifact.role,
             format_size(artifact.size, BINARY.decimal_places(1))
         );
+    }
+}
+
+fn print_plan_extras(plan: &FlashPlan) {
+    for artifact in &plan.artifacts {
+        if artifact.role.is_extra() {
+            println!(
+                "extra: {} ({}, {})",
+                artifact.path.display(),
+                artifact.role,
+                format_size(artifact.size, BINARY.decimal_places(1))
+            );
+        }
     }
 }

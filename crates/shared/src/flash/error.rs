@@ -38,6 +38,27 @@ pub enum Error {
     #[error("cannot infer write method from the prepared artifacts; specify `--via`")]
     MissingFlashVia,
 
+    #[error("`{via}` requires a `{role}` image artifact")]
+    MissingArtifact {
+        via: crate::catalog::FlashVia,
+        role: crate::catalog::Role,
+    },
+
+    #[error("`{via}` requires extra `{role}` file; pass `--extra {role}=<PATH>`")]
+    MissingExtra {
+        via: crate::catalog::FlashVia,
+        role: crate::catalog::Role,
+    },
+
+    #[error("`{via}` does not use extra `{role}` file")]
+    UnexpectedExtra {
+        via: crate::catalog::FlashVia,
+        role: crate::catalog::Role,
+    },
+
+    #[error("extra `{role}` file was specified more than once")]
+    DuplicateExtra { role: crate::catalog::Role },
+
     #[error(transparent)]
     Sidecar(#[from] crate::sidecar_client::Error),
 }

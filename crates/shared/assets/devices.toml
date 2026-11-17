@@ -27,8 +27,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/eic7700",
 ]
-flash_via = ["dd-partitions", "fastboot"]
-partition_scheme = "boot+root"
+flash_via = ["dd-boot-root", "fastboot"]
 
 [[devices]]
 arch = "riscv"
@@ -41,8 +40,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/sg2042",
 ]
-flash_via = ["dd-partitions"]
-# TODO: partition_scheme = # bl in sd/mtd sys in nvme lol
+flash_via = ["dd-root"]
 
 [[devices]]
 arch = "riscv"
@@ -54,8 +52,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/sg2044",
 ]
-flash_via = ["dd-partitions"]
-# TODO: partition_scheme = 
+flash_via = ["dd-root"]
 
 # TODO: milkv-meles
 [[devices]]
@@ -70,7 +67,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/th1520",
 ]
-flash_via = ["fastboot"]
+flash_via = ["fastboot-th1520"]
 
 # TODO: k1
 [[devices]]
@@ -89,7 +86,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/k1",
 ]
-flash_via = ["fastboot"]
+flash_via = ["fastboot-spacemit"]
 
 [[devices]]
 arch = "riscv"
@@ -101,7 +98,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/k3",
 ]
-flash_via = ["fastboot"]
+flash_via = ["fastboot-spacemit"]
 
 [[devices]]
 arch = "riscv"
@@ -141,8 +138,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/q6a",
 ]
-flash_via = ["dd-partitions"]
-partition_scheme = "efi+root"
+flash_via = ["dd-efi-root"]
 
 # TODO: dshanpi-a1
 [[devices]]
@@ -158,7 +154,7 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/rockchip",
 ]
-flash_via = ["rkdeveloptool"]
+flash_via = ["rkdeveloptool", "dd-root"]
 
 # TODO: a7z
 [[devices]]
@@ -172,5 +168,4 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/a733",
 ]
-flash_via = ["dd-partitions"]
-partition_scheme = "root"
+flash_via = ["dd-a733"]
