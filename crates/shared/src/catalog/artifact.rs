@@ -28,9 +28,6 @@ pub enum Role {
     /// MaskROM loader binary (`rkdeveloptool db <loader>`).
     Loader,
 
-    /// GPT partition table definition (`fastboot flash gpt <gpt>`).
-    Gpt,
-
     /// Bootinfo binary (`fastboot flash bootinfo <bootinfo>`).
     Bootinfo,
 
@@ -59,7 +56,6 @@ impl Role {
             Role::Efi => "efi",
             Role::Root => "root",
             Role::Loader => "loader",
-            Role::Gpt => "gpt",
             Role::Bootinfo => "bootinfo",
             Role::Fsbl => "fsbl",
             Role::Env => "env",
@@ -75,7 +71,6 @@ impl Role {
         matches!(
             self,
             Role::Loader
-                | Role::Gpt
                 | Role::Bootinfo
                 | Role::Fsbl
                 | Role::Env
@@ -103,7 +98,7 @@ impl Role {
     /// Write-order key: extra files come before whole-disk and partition artifacts.
     pub const fn rank(self) -> u8 {
         match self {
-            Role::Loader | Role::Gpt => 0,
+            Role::Loader => 0,
             Role::Bootinfo => 1,
             Role::Fsbl => 2,
             Role::Env => 3,
@@ -134,7 +129,6 @@ impl FromStr for Role {
             "efi" => Ok(Role::Efi),
             "root" => Ok(Role::Root),
             "loader" => Ok(Role::Loader),
-            "gpt" => Ok(Role::Gpt),
             "bootinfo" => Ok(Role::Bootinfo),
             "fsbl" => Ok(Role::Fsbl),
             "env" => Ok(Role::Env),

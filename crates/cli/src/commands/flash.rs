@@ -63,7 +63,7 @@ fn parse_extra(spec: &str) -> std::result::Result<(Role, PathBuf), String> {
     let role = Role::from_str(role.trim()).map_err(|err| err.to_string())?;
     if !role.is_extra() {
         return Err(format!(
-            "`{role}` is not a user-supplied extra role; expected one of loader, gpt, bootinfo, fsbl, env, opensbi, boot0, uboot"
+            "`{role}` is not a user-supplied extra role; expected one of loader, bootinfo, fsbl, env, opensbi, boot0, uboot"
         ));
     }
 

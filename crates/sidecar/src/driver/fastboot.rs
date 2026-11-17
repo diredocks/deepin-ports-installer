@@ -5,8 +5,9 @@
 //! * `fastboot-th1520`: flashes `uboot` to `ram`, reboots and reconnects, then flashes
 //!   `uboot`, `boot` and `root`, and reboots (th1520);
 //! * `fastboot-spacemit`: stages `fsbl` (`continue` + reconnect), stages `uboot`
-//!   (`continue` + reconnect), then flashes `gpt`, `bootinfo`, `fsbl`, `env`,
-//!   `opensbi`, `uboot`, `boot` and `root` (k1, k3).
+//!   (`continue` + reconnect), flashes the partition table (`mtd` + `gpt` or
+//!   combined `gpt`), then flashes `bootinfo`, `fsbl`, `env`, `opensbi`,
+//!   `uboot`, `bootfs` and `rootfs` (k1, k3).
 
 mod boot_root;
 mod spacemit;
@@ -64,6 +65,10 @@ enum Step {
         path: PathBuf,
         size: u64,
     },
+    FlashBytes {
+        partition: &'static str,
+        data: &'static [u8],
+    },
     RebootAndReconnect,
     Reboot,
 }
@@ -89,6 +94,7 @@ async fn execute_steps(steps: &[Step], progress: &mut impl FnMut(Amount)) -> Res
         .iter()
         .map(|step| match step {
             Step::StageAndContinue { size, .. } | Step::Flash { size, .. } => *size,
+            Step::FlashBytes { data, .. } => data.len() as u64,
             Step::RebootAndReconnect | Step::Reboot => 0,
         })
         .sum();
@@ -119,6 +125,10 @@ async fn execute_steps(steps: &[Step], progress: &mut impl FnMut(Amount)) -> Res
             } => {
                 flash_file(&mut fb, partition, path, *size, &mut progress).await?;
                 progress.advance(*size);
+            }
+            Step::FlashBytes { partition, data } => {
+                flash_bytes(&mut fb, partition, data, &mut progress).await?;
+                progress.advance(data.len() as u64);
             }
             Step::RebootAndReconnect => {
                 fb.reboot()
@@ -219,6 +229,38 @@ async fn flash_file<F: FnMut(Amount)>(
 
     let size = checked_download_size(path, file_size)?;
     download_raw(fb, path, &mut file, size, progress).await?;
+    fb.flash(partition)
+        .await
+        .map_err(|err| Error::Fastboot(format!("failed to flash `{partition}`: {err}")))
+}
+
+async fn flash_bytes<F: FnMut(Amount)>(
+    fb: &mut NusbFastBoot,
+    partition: &str,
+    data: &[u8],
+    progress: &mut Progress<'_, F>,
+) -> Result<()> {
+    let size = u32::try_from(data.len()).map_err(|_| {
+        Error::InvalidPlan(format!(
+            "inline payload for `{partition}` ({} bytes) exceeds 4 GiB fastboot download limit",
+            data.len()
+        ))
+    })?;
+
+    let mut sender = fb
+        .download(size)
+        .await
+        .map_err(|err| Error::Fastboot(format!("fastboot download failed: {err}")))?;
+    sender
+        .extend_from_slice(data)
+        .await
+        .map_err(|err| Error::Fastboot(format!("fastboot transfer failed: {err}")))?;
+    progress.report(data.len() as u64);
+    sender
+        .finish()
+        .await
+        .map_err(|err| Error::Fastboot(format!("fastboot download finish failed: {err}")))?;
+
     fb.flash(partition)
         .await
         .map_err(|err| Error::Fastboot(format!("failed to flash `{partition}`: {err}")))

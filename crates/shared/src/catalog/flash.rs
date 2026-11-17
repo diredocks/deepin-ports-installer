@@ -36,7 +36,7 @@ pub enum FlashVia {
     /// Flash T-Head TH1520 (`uboot` staged to RAM, then `uboot`, `boot`, `root`) through `fastboot`.
     FastbootTh1520,
 
-    /// Flash SpacemiT K1/K3 (`gpt`, factory bootloader binaries, `boot`, `root`) through `fastboot`.
+    /// Flash SpacemiT K1/K3 (factory bootloader binaries, `boot`, `root`) through `fastboot`.
     FastbootSpacemit,
 
     /// Write the Rockchip boot medium through `rkdeveloptool` in MaskROM mode.
@@ -73,7 +73,6 @@ impl FlashVia {
             FlashVia::DdA733 => &[Role::Boot0, Role::Uboot, Role::Root],
             FlashVia::FastbootTh1520 => &[Role::Uboot, Role::Boot, Role::Root],
             FlashVia::FastbootSpacemit => &[
-                Role::Gpt,
                 Role::Bootinfo,
                 Role::Fsbl,
                 Role::Env,
