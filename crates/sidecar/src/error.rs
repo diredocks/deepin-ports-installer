@@ -27,6 +27,21 @@ pub enum Error {
 
     #[error("failed to serialize JSON: {0}")]
     SerializeJson(#[from] serde_json::Error),
+
+    #[error("failed to generate random bytes: {0}")]
+    Random(#[from] getrandom::Error),
+
+    #[error("failed to write GPT partition table: {0}")]
+    Gpt(#[from] gptman::Error),
+
+    #[error("fastboot failed: {0}")]
+    Fastboot(String),
+}
+
+impl From<shared::catalog::Error> for Error {
+    fn from(err: shared::catalog::Error) -> Self {
+        Self::InvalidPlan(err.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

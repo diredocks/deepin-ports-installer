@@ -5,6 +5,7 @@
 //! token on stdout, and serves the closed set of operations in
 //! [`shared::protocol::Request`].
 
+use std::fmt::Write as _;
 use std::future::Future;
 use std::io::{self, Write};
 use std::net::Ipv4Addr;
@@ -21,7 +22,6 @@ use tungstenite::handshake::server::{
 use tungstenite::http::{Response as HttpResponse, StatusCode};
 
 use crate::driver;
-use crate::platform;
 use crate::{Error, Result};
 use shared::fsx::Amount;
 use shared::protocol::FlashPlan;
@@ -42,7 +42,7 @@ pub fn serve() -> Result<()> {
 
     let handshake = Handshake {
         address: listener.local_addr().map_err(Error::Io)?.to_string(),
-        token: platform::random_token()?,
+        token: random_token()?,
     };
 
     let json = serde_json::to_string(&handshake)?;
@@ -194,6 +194,18 @@ fn unauthorized() -> ErrorResponse {
         .status(StatusCode::UNAUTHORIZED)
         .body(Some("unauthorized".to_owned()))
         .expect("the unauthorized response is always valid")
+}
+
+/// Generate a 256-bit token from the OS CSPRNG, hex encoded.
+fn random_token() -> Result<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes)?;
+
+    let mut token = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(token, "{byte:02x}");
+    }
+    Ok(token)
 }
 
 #[cfg(test)]

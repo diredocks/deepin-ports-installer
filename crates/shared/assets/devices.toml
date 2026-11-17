@@ -54,7 +54,6 @@ links = [
 ]
 flash_via = ["dd-root"]
 
-# TODO: milkv-meles
 [[devices]]
 arch = "riscv"
 platform = "xiuantie-c910"
@@ -67,9 +66,8 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/th1520",
 ]
-flash_via = ["fastboot-th1520"]
+flash_via = ["fastboot-th1520", "dd-th1520"]
 
-# TODO: k1
 [[devices]]
 arch = "riscv"
 platform = "spacemit-x60"
@@ -156,7 +154,6 @@ links = [
 ]
 flash_via = ["rkdeveloptool", "dd-root"]
 
-# TODO: a7z
 [[devices]]
 arch = "arm64"
 platform = "allwinner"

@@ -24,7 +24,10 @@ pub enum FlashVia {
     /// Create a single `root` partition on the medium and write the root image in place.
     DdRoot,
 
-    /// Partition the Allwinner A733 medium (`root` starting at sector 65536) and write U-Boot.
+    /// Partition the T-Head TH1520 TF card (2M reserved + `boot` + `swap` + `root`) and write `boot` and `root`.
+    DdTh1520,
+
+    /// Partition the Allwinner A733 medium (`root` starting at sector 65536) and write boot0 and U-Boot.
     DdA733,
 
     /// Flash `boot` and `root` partitions directly through `fastboot` over USB.
@@ -48,6 +51,7 @@ impl FlashVia {
             FlashVia::DdBootRoot => "dd-boot-root",
             FlashVia::DdEfiRoot => "dd-efi-root",
             FlashVia::DdRoot => "dd-root",
+            FlashVia::DdTh1520 => "dd-th1520",
             FlashVia::DdA733 => "dd-a733",
             FlashVia::Fastboot => "fastboot",
             FlashVia::FastbootTh1520 => "fastboot-th1520",
@@ -61,10 +65,12 @@ impl FlashVia {
         match self {
             FlashVia::DdWhole => &[Role::Disk],
             FlashVia::IsoWrite => &[Role::Iso],
-            FlashVia::DdBootRoot | FlashVia::Fastboot => &[Role::Boot, Role::Root],
+            FlashVia::DdBootRoot | FlashVia::DdTh1520 | FlashVia::Fastboot => {
+                &[Role::Boot, Role::Root]
+            }
             FlashVia::DdEfiRoot => &[Role::Efi, Role::Root],
             FlashVia::DdRoot => &[Role::Root],
-            FlashVia::DdA733 => &[Role::Uboot, Role::Root],
+            FlashVia::DdA733 => &[Role::Boot0, Role::Uboot, Role::Root],
             FlashVia::FastbootTh1520 => &[Role::Uboot, Role::Boot, Role::Root],
             FlashVia::FastbootSpacemit => &[
                 Role::Gpt,

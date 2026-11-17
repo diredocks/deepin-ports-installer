@@ -6,7 +6,6 @@
 
 mod driver;
 mod error;
-mod platform;
 mod server;
 
 pub use error::{Error, Result};

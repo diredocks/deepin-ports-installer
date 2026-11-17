@@ -43,6 +43,9 @@ pub enum Role {
     /// OpenSBI firmware image (`fastboot flash opensbi <opensbi>`).
     Opensbi,
 
+    /// Allwinner stage-1 SPL bootloader (`boot0_sdcard.bin`).
+    Boot0,
+
     /// U-Boot binary or FIT image (`u-boot-with-spl.bin`, `u-boot.itb`, etc.).
     Uboot,
 }
@@ -61,6 +64,7 @@ impl Role {
             Role::Fsbl => "fsbl",
             Role::Env => "env",
             Role::Opensbi => "opensbi",
+            Role::Boot0 => "boot0",
             Role::Uboot => "uboot",
         }
     }
@@ -76,6 +80,7 @@ impl Role {
                 | Role::Fsbl
                 | Role::Env
                 | Role::Opensbi
+                | Role::Boot0
                 | Role::Uboot
         )
     }
@@ -103,10 +108,11 @@ impl Role {
             Role::Fsbl => 2,
             Role::Env => 3,
             Role::Opensbi => 4,
-            Role::Uboot => 5,
-            Role::Disk | Role::Iso => 6,
-            Role::Boot | Role::Efi => 7,
-            Role::Root => 8,
+            Role::Boot0 => 5,
+            Role::Uboot => 6,
+            Role::Disk | Role::Iso => 7,
+            Role::Boot | Role::Efi => 8,
+            Role::Root => 9,
         }
     }
 }
@@ -133,6 +139,7 @@ impl FromStr for Role {
             "fsbl" => Ok(Role::Fsbl),
             "env" => Ok(Role::Env),
             "opensbi" => Ok(Role::Opensbi),
+            "boot0" => Ok(Role::Boot0),
             "uboot" => Ok(Role::Uboot),
             _ => Err(Error::UnknownRole(slug.to_owned())),
         }
@@ -148,6 +155,15 @@ pub struct Artifact {
 
     /// Size in bytes.
     pub size: u64,
+}
+
+impl Artifact {
+    pub fn by_role(artifacts: &[Self], role: Role) -> Result<&Self> {
+        artifacts
+            .iter()
+            .find(|artifact| artifact.role == role)
+            .ok_or(Error::MissingArtifact(role))
+    }
 }
 
 #[cfg(test)]
