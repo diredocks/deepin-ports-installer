@@ -5,13 +5,14 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 use super::{Device, is_virtual, partition_table, run_lsblk, text};
-use crate::drives::Result;
-use crate::drives::{Enumerator, Mountpoint, Target};
+use crate::targets::Result;
+use crate::targets::{Enumerator, Mountpoint, Target};
 
 pub(super) fn scan() -> Result<Vec<Target>> {
     let output = run_lsblk(&["--bytes", "--all", "--json", "--paths", "--output-all"])?;
 
-    let parsed: LsblkOutput = serde_json::from_str(&output).map_err(crate::drives::Error::LsblkJson)?;
+    let parsed: LsblkOutput =
+        serde_json::from_str(&output).map_err(crate::targets::Error::LsblkJson)?;
     Ok(parsed.blockdevices.iter().filter_map(target).collect())
 }
 
@@ -106,7 +107,7 @@ fn target(device: &LsblkDevice) -> Option<Target> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::drives::{BusType, PartitionTable};
+    use crate::targets::{BusType, PartitionTable};
 
     const JSON: &str = r#"{
         "blockdevices": [

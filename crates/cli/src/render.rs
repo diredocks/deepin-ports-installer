@@ -4,7 +4,7 @@ use anyhow::Result;
 use shared::catalog::{DeviceGroup, DeviceIndex, Image, ImageIndex};
 use clap::ValueEnum;
 use comfy_table::{Cell, ContentArrangement, Table, presets};
-use shared::drives::{Target, TargetList};
+use shared::targets::{Target, TargetList};
 use humansize::{BINARY, format_size};
 use indicatif::{ProgressBar, ProgressStyle};
 

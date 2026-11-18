@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::{Device, is_virtual, partition_table, run_lsblk, text_is_true};
-use crate::drives::{Enumerator, Mountpoint, Target};
-use crate::drives::{Error, Result};
+use crate::targets::{Enumerator, Mountpoint, Target};
+use crate::targets::{Error, Result};
 
 /// One `--pairs` row, keyed by lowercased column name.
 type Fields = HashMap<String, String>;
@@ -129,7 +129,7 @@ fn number(row: &Fields, key: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::drives::{BusType, PartitionTable};
+    use crate::targets::{BusType, PartitionTable};
 
     const PAIRS: &str = r#"NAME="sda" MAJ:MIN="8:0" RM="0" SIZE="240065183744" RO="0" TYPE="disk" MOUNTPOINT="" PTTYPE="gpt"
 NAME="sda1" MAJ:MIN="8:1" RM="0" SIZE="209715200" RO="0" TYPE="part" MOUNTPOINT="/boot/efi" LABEL="EFI" PTTYPE="gpt"

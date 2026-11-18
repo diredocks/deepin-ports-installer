@@ -9,8 +9,8 @@
 //! 3. collect mount points via `DiskArbitration`, then merge APFS volumes into
 //!    their physical store as `drivelist` does in `lib/index.ts`.
 
-use crate::drives::{Result, TargetList};
+use crate::targets::{Result, Target};
 
-pub(crate) fn scan() -> Result<TargetList> {
+pub(crate) fn scan() -> Result<Vec<Target>> {
     todo!("enumerate block devices on macOS")
 }

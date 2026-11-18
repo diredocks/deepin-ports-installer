@@ -24,6 +24,7 @@ cli = ["dep:clap"]
 clap = { version = "4", features = ["derive"], optional = true }
 directories = { version = "6", optional = true }
 flate2 = { version = "1", optional = true }
+nusb = "0.2"
 reqwest = { version = "0.13", default-features = false, features = ["charset", "rustls-no-provider"], optional = true }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
 serde = { version = "1", features = ["derive"] }

@@ -9,8 +9,8 @@
 //!    `IOCTL_STORAGE_GET_DEVICE_NUMBER`;
 //! 3. resolve the mounted volume(s) of each disk to fill `mountpoints`.
 
-use crate::drives::{Result, TargetList};
+use crate::targets::{Result, Target};
 
-pub(crate) fn scan() -> Result<TargetList> {
+pub(crate) fn scan() -> Result<Vec<Target>> {
     todo!("enumerate block devices on Windows")
 }

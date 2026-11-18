@@ -19,21 +19,21 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::drives::{BusType, Enumerator, Mountpoint, PartitionTable, Target, TargetList};
-use crate::drives::{Error, Result};
+use crate::targets::{BusType, Enumerator, Mountpoint, PartitionTable, Target};
+use crate::targets::{Error, Result};
 
 const LSBLK: &str = "lsblk";
 
 const DISK_PATH_DIR: &str = "/dev/disk/by-path";
 
-pub(crate) fn scan() -> Result<TargetList> {
+pub(crate) fn scan() -> Result<Vec<Target>> {
     let mut targets = match json::scan() {
         Ok(targets) => targets,
         Err(_) => pairs::scan()?,
     };
 
     add_device_paths(&mut targets);
-    Ok(TargetList::new(targets))
+    Ok(targets)
 }
 
 fn run_lsblk(args: &[&str]) -> Result<String> {

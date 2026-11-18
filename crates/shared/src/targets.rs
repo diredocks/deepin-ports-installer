@@ -10,8 +10,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+mod block_device;
 mod error;
-mod platform;
+pub mod fastboot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -36,6 +37,9 @@ pub enum Enumerator {
 
     #[serde(rename = "lsblk:pairs")]
     LsblkPairs,
+
+    #[serde(rename = "usb:fastboot")]
+    UsbFastboot,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -183,13 +187,16 @@ impl TargetList {
         Self { targets }
     }
 
-    /// Enumerate the local block devices of this host.
+    /// Enumerate the local block devices and USB fastboot targets of this host.
     ///
-    /// On Linux this runs `lsblk`; see the module documentation for details.
+    /// On Linux block devices come from `lsblk`, and USB fastboot devices are
+    /// discovered via `nusb`.
     pub fn scan() -> Result<Self> {
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         {
-            platform::scan()
+            let mut targets = block_device::scan()?;
+            targets.extend(fastboot::scan());
+            Ok(Self::new(targets))
         }
 
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]

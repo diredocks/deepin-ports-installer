@@ -1,6 +1,6 @@
 //! Per-platform block device enumeration.
 //!
-//! Every backend fills the shared [`Target`](crate::drives::Target) model, so only the
+//! Every backend fills the shared [`Target`](crate::targets::Target) model, so only the
 //! parts that talk to the operating system live here. Exactly one backend is
 //! compiled for the host platform: Linux shells out to `lsblk`, macOS and
 //! Windows are scaffolded with `todo!()`.

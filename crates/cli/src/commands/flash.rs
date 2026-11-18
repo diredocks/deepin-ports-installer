@@ -21,7 +21,7 @@ pub struct FlashArgs {
     #[arg(value_name = "SOURCE")]
     pub source: String,
 
-    /// Block device to write to (e.g. /dev/sdX or /dev/mmcblk0)
+    /// Target device to write to (e.g. /dev/sdX, /dev/mmcblk0, or /dev/bus/usb/001/004)
     #[arg(value_name = "TARGET")]
     pub target: PathBuf,
 

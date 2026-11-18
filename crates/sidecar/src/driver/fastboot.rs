@@ -22,7 +22,7 @@ use android_sparse_image::{
     CHUNK_HEADER_BYTES_LEN, ChunkHeader, FILE_HEADER_BYTES_LEN, FileHeader, FileHeaderBytes,
     ParseError,
 };
-use fastboot_protocol::nusb::{DataDownload, NusbFastBoot, NusbFastBootError};
+use fastboot_protocol::nusb::{DataDownload, DeviceInfo, NusbFastBoot, NusbFastBootError};
 use fastboot_protocol::protocol::parse_u32;
 use shared::catalog::{Artifact, FlashVia, Role};
 use shared::fsx::{self, Amount};
@@ -75,7 +75,7 @@ enum Step {
 
 pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
     let steps = build_steps(plan.via, &plan.artifacts)?;
-    execute_steps(&steps, &mut progress).await
+    execute_steps(&plan.target, &steps, &mut progress).await
 }
 
 fn build_steps(via: FlashVia, artifacts: &[Artifact]) -> Result<Vec<Step>> {
@@ -89,7 +89,11 @@ fn build_steps(via: FlashVia, artifacts: &[Artifact]) -> Result<Vec<Step>> {
     }
 }
 
-async fn execute_steps(steps: &[Step], progress: &mut impl FnMut(Amount)) -> Result<()> {
+async fn execute_steps(
+    target: &Path,
+    steps: &[Step],
+    progress: &mut impl FnMut(Amount),
+) -> Result<()> {
     let total: u64 = steps
         .iter()
         .map(|step| match step {
@@ -99,7 +103,7 @@ async fn execute_steps(steps: &[Step], progress: &mut impl FnMut(Amount)) -> Res
         })
         .sum();
 
-    let mut fb = open_device().await?;
+    let (mut fb, previous) = open_device(target).await?;
     let mut progress = Progress {
         done: 0,
         total,
@@ -116,7 +120,7 @@ async fn execute_steps(steps: &[Step], progress: &mut impl FnMut(Amount)) -> Res
                     .await
                     .map_err(|err| Error::Fastboot(format!("continue boot failed: {err}")))?;
                 drop(fb);
-                fb = reconnect().await?;
+                fb = reconnect(&previous).await?;
             }
             Step::Flash {
                 partition,
@@ -135,7 +139,7 @@ async fn execute_steps(steps: &[Step], progress: &mut impl FnMut(Amount)) -> Res
                     .await
                     .map_err(|err| Error::Fastboot(format!("reboot failed: {err}")))?;
                 drop(fb);
-                fb = reconnect().await?;
+                fb = reconnect(&previous).await?;
             }
             Step::Reboot => {
                 fb.reboot()
@@ -157,25 +161,35 @@ fn flash_step(artifacts: &[Artifact], partition: &'static str, role: Role) -> Re
     })
 }
 
-async fn open_device() -> Result<NusbFastBoot> {
+async fn open_device(target: &Path) -> Result<(NusbFastBoot, DeviceInfo)> {
     let mut devices = fastboot_protocol::nusb::devices()
         .await
         .map_err(|err| Error::Fastboot(format!("failed to enumerate USB devices: {err}")))?;
     let info = devices
-        .next()
-        .ok_or_else(|| Error::Fastboot("no fastboot USB device found".into()))?;
+        .find(|info| shared::targets::fastboot::matches(info, target))
+        .ok_or_else(|| {
+            Error::Fastboot(format!(
+                "no fastboot USB device matching `{}` found",
+                target.display()
+            ))
+        })?;
 
-    NusbFastBoot::from_info(&info)
+    let fb = NusbFastBoot::from_info(&info)
         .await
-        .map_err(|err| Error::Fastboot(format!("failed to open fastboot USB device: {err}")))
+        .map_err(|err| Error::Fastboot(format!("failed to open fastboot USB device: {err}")))?;
+    Ok((fb, info))
 }
 
-async fn reconnect() -> Result<NusbFastBoot> {
+async fn reconnect(previous: &DeviceInfo) -> Result<NusbFastBoot> {
     sleep(RECONNECT_SETTLE).await;
     let deadline = Instant::now() + RECONNECT_TIMEOUT;
 
     loop {
-        if let Ok(fb) = open_device().await {
+        if let Ok(mut devices) = fastboot_protocol::nusb::devices().await
+            && let Some(info) =
+                devices.find(|info| shared::targets::fastboot::same_port(previous, info))
+            && let Ok(fb) = NusbFastBoot::from_info(&info).await
+        {
             return Ok(fb);
         }
         if Instant::now() >= deadline {

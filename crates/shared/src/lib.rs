@@ -8,13 +8,12 @@
 pub mod catalog;
 pub mod fsx;
 pub mod protocol;
+pub mod targets;
 
 #[cfg(feature = "full")]
 pub mod archive;
 #[cfg(feature = "full")]
 pub mod checksum;
-#[cfg(feature = "full")]
-pub mod drives;
 #[cfg(feature = "full")]
 pub mod fetch;
 #[cfg(feature = "full")]

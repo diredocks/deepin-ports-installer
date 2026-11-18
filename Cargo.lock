@@ -1712,6 +1712,7 @@ dependencies = [
  "directories",
  "flate2",
  "libc",
+ "nusb",
  "reqwest",
  "rustls",
  "serde",
