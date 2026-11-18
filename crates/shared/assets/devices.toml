@@ -13,6 +13,7 @@ links = [
 ]
 flash_via = ["dd-whole"]
 
+# NOTE: tested with eic7700-sbc (serial operations not included)
 [[devices]]
 arch = "riscv"
 platform = "sifive-p550"
@@ -54,6 +55,7 @@ links = [
 ]
 flash_via = ["dd-root"]
 
+# NOTE: tested with milkv-meles
 [[devices]]
 arch = "riscv"
 platform = "xiuantie-c910"
@@ -154,6 +156,7 @@ links = [
 ]
 flash_via = ["rkdeveloptool", "dd-root"]
 
+# NOTE: tested with a7z
 [[devices]]
 arch = "arm64"
 platform = "allwinner"
