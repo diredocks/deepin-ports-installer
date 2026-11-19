@@ -36,6 +36,9 @@ pub enum Error {
 
     #[error("fastboot failed: {0}")]
     Fastboot(String),
+
+    #[error("rockusb failed: {0}")]
+    Rockusb(String),
 }
 
 impl From<shared::catalog::Error> for Error {

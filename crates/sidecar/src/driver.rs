@@ -3,9 +3,8 @@
 //! `iso-write` is a separate method because a bootable ISO is its own kind of
 //! artifact, but it writes like a whole-disk image and shares [`whole::write`].
 //!
-//! The only parts of the installer that touch a block device or USB fastboot
-//! device, and they only run inside the privileged helper. `rkdeveloptool` is
-//! not implemented yet (`todo!()`).
+//! The only parts of the installer that touch a block device, USB fastboot, or
+//! USB RockUSB device, and they only run inside the privileged helper.
 
 use shared::fsx::Amount;
 use shared::protocol::FlashPlan;

@@ -2,7 +2,7 @@
 //! platform elevation (`pkexec` on Linux).
 //!
 //! Links `shared` with `default-features = false` so HTTP/archive/UI code stays
-//! out of the root process. Write drivers in `driver/` are not implemented yet.
+//! out of the root process. Write drivers live in `driver/`.
 
 mod driver;
 mod error;
