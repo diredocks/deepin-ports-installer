@@ -7,6 +7,8 @@
 mod driver;
 mod error;
 mod server;
+#[cfg(test)]
+mod testutils;
 
 pub use error::{Error, Result};
 pub use server::serve;

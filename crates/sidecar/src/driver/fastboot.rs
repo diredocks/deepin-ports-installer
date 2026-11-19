@@ -1,21 +1,10 @@
 //! Fastboot drivers (`fastboot`, `fastboot-th1520`, `fastboot-spacemit`):
 //! flash named partitions through the bootloader over USB using `fastboot-protocol`.
-//!
-//! * `fastboot`: flashes `boot` and `root` into partitions of the same names (eic7700);
-//! * `fastboot-th1520`: flashes `uboot` to `ram`, reboots and reconnects, then flashes
-//!   `uboot`, `boot` and `root`, and reboots (th1520);
-//! * `fastboot-spacemit`: stages `fsbl` (`continue` + reconnect), stages `uboot`
-//!   (`continue` + reconnect), flashes the partition table (`mtd` + `gpt` or
-//!   combined `gpt`), then flashes `bootinfo`, `fsbl`, `env`, `opensbi`,
-//!   `uboot`, `bootfs` and `rootfs` (k1, k3).
 
-mod boot_root;
 mod spacemit;
-mod th1520;
 
-use std::io::SeekFrom;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use android_sparse_image::split::{Split, SplitChunk, split_image, split_raw};
 use android_sparse_image::{
@@ -29,31 +18,11 @@ use shared::fsx::{self, Amount};
 use shared::protocol::FlashPlan;
 use tokio::fs::File;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeekExt};
-use tokio::time::{Instant, sleep};
 
+use super::{Progress, open_usb_device, reconnect_usb_device};
 use crate::{Error, Result};
 
 const DEFAULT_MAX_DOWNLOAD: u32 = 256 * 1024 * 1024;
-const RECONNECT_SETTLE: Duration = Duration::from_secs(1);
-const RECONNECT_POLL: Duration = Duration::from_millis(250);
-const RECONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-
-struct Progress<'a, F: ?Sized> {
-    done: u64,
-    total: u64,
-    report: &'a mut F,
-}
-
-impl<F: FnMut(Amount) + ?Sized> Progress<'_, F> {
-    fn report(&mut self, current: u64) {
-        (self.report)(Amount::new(self.done + current, Some(self.total)));
-    }
-
-    fn advance(&mut self, delta: u64) {
-        self.done += delta;
-        (self.report)(Amount::new(self.done, Some(self.total)));
-    }
-}
 
 enum Step {
     StageAndContinue {
@@ -80,8 +49,18 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
 
 fn build_steps(via: FlashVia, artifacts: &[Artifact]) -> Result<Vec<Step>> {
     match via {
-        FlashVia::Fastboot => boot_root::steps(artifacts),
-        FlashVia::FastbootTh1520 => th1520::steps(artifacts),
+        FlashVia::Fastboot => Ok(vec![
+            flash_step(artifacts, "boot", Role::Boot)?,
+            flash_step(artifacts, "root", Role::Root)?,
+        ]),
+        FlashVia::FastbootTh1520 => Ok(vec![
+            flash_step(artifacts, "ram", Role::Uboot)?,
+            Step::RebootAndReconnect,
+            flash_step(artifacts, "uboot", Role::Uboot)?,
+            flash_step(artifacts, "boot", Role::Boot)?,
+            flash_step(artifacts, "root", Role::Root)?,
+            Step::Reboot,
+        ]),
         FlashVia::FastbootSpacemit => spacemit::steps(artifacts),
         other => Err(Error::InvalidPlan(format!(
             "fastboot driver does not support `{other}`"
@@ -103,12 +82,16 @@ async fn execute_steps(
         })
         .sum();
 
-    let (mut fb, previous) = open_device(target).await?;
-    let mut progress = Progress {
-        done: 0,
-        total,
-        report: progress,
-    };
+    let (mut fb, previous) = open_usb_device(
+        target,
+        "fastboot",
+        Error::Fastboot,
+        fastboot_protocol::nusb::devices,
+        |info| async move { NusbFastBoot::from_info(&info).await },
+    )
+    .await?;
+    let mut progress = Progress::new(Some(total), progress);
+    let mut max_download: Option<u32> = None;
 
     for step in steps {
         match step {
@@ -121,13 +104,22 @@ async fn execute_steps(
                     .map_err(|err| Error::Fastboot(format!("continue boot failed: {err}")))?;
                 drop(fb);
                 fb = reconnect(&previous).await?;
+                max_download = None;
             }
             Step::Flash {
                 partition,
                 path,
                 size,
             } => {
-                flash_file(&mut fb, partition, path, *size, &mut progress).await?;
+                flash_file(
+                    &mut fb,
+                    partition,
+                    path,
+                    *size,
+                    &mut max_download,
+                    &mut progress,
+                )
+                .await?;
                 progress.advance(*size);
             }
             Step::FlashBytes { partition, data } => {
@@ -140,6 +132,7 @@ async fn execute_steps(
                     .map_err(|err| Error::Fastboot(format!("reboot failed: {err}")))?;
                 drop(fb);
                 fb = reconnect(&previous).await?;
+                max_download = None;
             }
             Step::Reboot => {
                 fb.reboot()
@@ -152,6 +145,14 @@ async fn execute_steps(
     Ok(())
 }
 
+fn stage_step(artifacts: &[Artifact], role: Role) -> Result<Step> {
+    let artifact = Artifact::by_role(artifacts, role)?;
+    Ok(Step::StageAndContinue {
+        path: artifact.path.clone(),
+        size: artifact.size,
+    })
+}
+
 fn flash_step(artifacts: &[Artifact], partition: &'static str, role: Role) -> Result<Step> {
     let artifact = Artifact::by_role(artifacts, role)?;
     Ok(Step::Flash {
@@ -161,45 +162,15 @@ fn flash_step(artifacts: &[Artifact], partition: &'static str, role: Role) -> Re
     })
 }
 
-async fn open_device(target: &Path) -> Result<(NusbFastBoot, DeviceInfo)> {
-    let mut devices = fastboot_protocol::nusb::devices()
-        .await
-        .map_err(|err| Error::Fastboot(format!("failed to enumerate USB devices: {err}")))?;
-    let info = devices
-        .find(|info| shared::targets::fastboot::matches(info, target))
-        .ok_or_else(|| {
-            Error::Fastboot(format!(
-                "no fastboot USB device matching `{}` found",
-                target.display()
-            ))
-        })?;
-
-    let fb = NusbFastBoot::from_info(&info)
-        .await
-        .map_err(|err| Error::Fastboot(format!("failed to open fastboot USB device: {err}")))?;
-    Ok((fb, info))
-}
-
 async fn reconnect(previous: &DeviceInfo) -> Result<NusbFastBoot> {
-    sleep(RECONNECT_SETTLE).await;
-    let deadline = Instant::now() + RECONNECT_TIMEOUT;
-
-    loop {
-        if let Ok(mut devices) = fastboot_protocol::nusb::devices().await
-            && let Some(info) =
-                devices.find(|info| shared::targets::fastboot::same_port(previous, info))
-            && let Ok(fb) = NusbFastBoot::from_info(&info).await
-        {
-            return Ok(fb);
-        }
-        if Instant::now() >= deadline {
-            return Err(Error::Fastboot(
-                "timed out waiting for fastboot device to reconnect".into(),
-            ));
-        }
-
-        sleep(RECONNECT_POLL).await;
-    }
+    reconnect_usb_device(
+        previous,
+        "fastboot",
+        Error::Fastboot,
+        fastboot_protocol::nusb::devices,
+        |info| async move { NusbFastBoot::from_info(&info).await },
+    )
+    .await
 }
 
 fn checked_download_size(path: &Path, file_size: u64) -> Result<u32> {
@@ -211,7 +182,7 @@ fn checked_download_size(path: &Path, file_size: u64) -> Result<u32> {
     })
 }
 
-async fn stage_file<F: FnMut(Amount)>(
+async fn stage_file<F: FnMut(Amount) + ?Sized>(
     fb: &mut NusbFastBoot,
     path: &Path,
     file_size: u64,
@@ -225,19 +196,29 @@ async fn stage_file<F: FnMut(Amount)>(
     download_raw(fb, path, &mut file, size, progress).await
 }
 
-async fn flash_file<F: FnMut(Amount)>(
+async fn flash_file<F: FnMut(Amount) + ?Sized>(
     fb: &mut NusbFastBoot,
     partition: &str,
     path: &Path,
     file_size: u64,
+    cached_max_download: &mut Option<u32>,
     progress: &mut Progress<'_, F>,
 ) -> Result<()> {
-    let max_download = query_max_download(fb).await?;
+    let max_download = match *cached_max_download {
+        Some(size) => size,
+        None => {
+            let size = query_max_download(fb).await?;
+            *cached_max_download = Some(size);
+            size
+        }
+    };
+
+    let splits = prepare_splits(path, file_size, max_download).await?;
     let mut file = File::open(path)
         .await
         .map_err(|source| fsx::Error::read(path, source))?;
 
-    if let Some(splits) = prepare_splits(path, &mut file, file_size, max_download).await? {
+    if let Some(splits) = splits {
         return flash_splits(fb, partition, path, &mut file, file_size, &splits, progress).await;
     }
 
@@ -248,7 +229,7 @@ async fn flash_file<F: FnMut(Amount)>(
         .map_err(|err| Error::Fastboot(format!("failed to flash `{partition}`: {err}")))
 }
 
-async fn flash_bytes<F: FnMut(Amount)>(
+async fn flash_bytes<F: FnMut(Amount) + ?Sized>(
     fb: &mut NusbFastBoot,
     partition: &str,
     data: &[u8],
@@ -261,20 +242,7 @@ async fn flash_bytes<F: FnMut(Amount)>(
         ))
     })?;
 
-    let mut sender = fb
-        .download(size)
-        .await
-        .map_err(|err| Error::Fastboot(format!("fastboot download failed: {err}")))?;
-    sender
-        .extend_from_slice(data)
-        .await
-        .map_err(|err| Error::Fastboot(format!("fastboot transfer failed: {err}")))?;
-    progress.report(data.len() as u64);
-    sender
-        .finish()
-        .await
-        .map_err(|err| Error::Fastboot(format!("fastboot download finish failed: {err}")))?;
-
+    download_raw(fb, Path::new("<inline>"), &mut &*data, size, progress).await?;
     fb.flash(partition)
         .await
         .map_err(|err| Error::Fastboot(format!("failed to flash `{partition}`: {err}")))
@@ -299,14 +267,13 @@ async fn query_max_download(fb: &mut NusbFastBoot) -> Result<u32> {
 
 async fn prepare_splits(
     path: &Path,
-    file: &mut File,
     file_size: u64,
     max_download: u32,
 ) -> Result<Option<Vec<Split>>> {
-    if let Some(splits) = try_parse_sparse_splits(path, file, file_size, max_download).await? {
+    if let Some(splits) = try_parse_sparse_splits(path, file_size, max_download).await? {
         return Ok(Some(splits));
     }
-    if file_size < u64::from(max_download) {
+    if file_size <= u64::from(max_download) {
         return Ok(None);
     }
 
@@ -321,7 +288,6 @@ async fn prepare_splits(
 
 async fn try_parse_sparse_splits(
     path: &Path,
-    file: &mut File,
     file_size: u64,
     max_download: u32,
 ) -> Result<Option<Vec<Split>>> {
@@ -329,19 +295,22 @@ async fn try_parse_sparse_splits(
         return Ok(None);
     }
 
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || parse_sparse_splits_sync(&path, max_download))
+        .await
+        .map_err(|err| Error::Io(std::io::Error::other(err)))?
+}
+
+fn parse_sparse_splits_sync(path: &Path, max_download: u32) -> Result<Option<Vec<Split>>> {
+    let mut file = std::fs::File::open(path).map_err(|source| fsx::Error::read(path, source))?;
+
     let mut header_bytes = FileHeaderBytes::default();
     file.read_exact(&mut header_bytes)
-        .await
         .map_err(|source| fsx::Error::read(path, source))?;
 
     let header = match FileHeader::from_bytes(&header_bytes) {
         Ok(header) => header,
-        Err(ParseError::UnknownMagic) => {
-            file.seek(SeekFrom::Start(0))
-                .await
-                .map_err(|source| fsx::Error::read(path, source))?;
-            return Ok(None);
-        }
+        Err(ParseError::UnknownMagic) => return Ok(None),
         Err(err) => {
             return Err(Error::InvalidPlan(format!(
                 "invalid sparse header in `{}`: {err}",
@@ -354,7 +323,6 @@ async fn try_parse_sparse_splits(
     for _ in 0..header.chunks {
         let mut chunk_bytes = [0u8; CHUNK_HEADER_BYTES_LEN];
         file.read_exact(&mut chunk_bytes)
-            .await
             .map_err(|source| fsx::Error::read(path, source))?;
         let chunk = ChunkHeader::from_bytes(&chunk_bytes).map_err(|err| {
             Error::InvalidPlan(format!(
@@ -369,7 +337,6 @@ async fn try_parse_sparse_splits(
             ))
         })?;
         file.seek(SeekFrom::Current(data_size))
-            .await
             .map_err(|source| fsx::Error::read(path, source))?;
         chunks.push(chunk);
     }
@@ -383,10 +350,10 @@ async fn try_parse_sparse_splits(
     Ok(Some(splits))
 }
 
-async fn download_raw<F: FnMut(Amount)>(
+async fn download_raw<R: AsyncRead + Unpin, F: FnMut(Amount) + ?Sized>(
     fb: &mut NusbFastBoot,
     path: &Path,
-    file: &mut File,
+    input: &mut R,
     size: u32,
     progress: &mut Progress<'_, F>,
 ) -> Result<()> {
@@ -402,11 +369,12 @@ async fn download_raw<F: FnMut(Amount)>(
             .get_mut_data(left)
             .await
             .map_err(|err| Error::Fastboot(format!("fastboot transfer failed: {err}")))?;
-        file.read_exact(buf)
+        input
+            .read_exact(buf)
             .await
             .map_err(|source| fsx::Error::read(path, source))?;
         sent += buf.len() as u64;
-        progress.report(sent);
+        progress.report_offset(sent);
     }
 
     sender
@@ -415,7 +383,7 @@ async fn download_raw<F: FnMut(Amount)>(
         .map_err(|err| Error::Fastboot(format!("fastboot download finish failed: {err}")))
 }
 
-async fn flash_splits<F: FnMut(Amount)>(
+async fn flash_splits<F: FnMut(Amount) + ?Sized>(
     fb: &mut NusbFastBoot,
     partition: &str,
     path: &Path,
@@ -436,7 +404,7 @@ async fn flash_splits<F: FnMut(Amount)>(
     Ok(())
 }
 
-async fn send_sparse_split<F: FnMut(Amount)>(
+async fn send_sparse_split<F: FnMut(Amount) + ?Sized>(
     fb: &mut NusbFastBoot,
     path: &Path,
     file: &mut File,
@@ -490,7 +458,7 @@ async fn send_sparse_split<F: FnMut(Amount)>(
         .map_err(|err| Error::Fastboot(format!("fastboot download finish failed: {err}")))
 }
 
-async fn stream_chunk_payload<F: FnMut(Amount)>(
+async fn stream_chunk_payload<F: FnMut(Amount) + ?Sized>(
     sender: &mut DataDownload<'_>,
     path: &Path,
     file: &mut File,
@@ -510,12 +478,13 @@ async fn stream_chunk_payload<F: FnMut(Amount)>(
             .get_mut_data(want)
             .await
             .map_err(|err| Error::Fastboot(format!("fastboot transfer failed: {err}")))?;
-        let filled = read_exact_padded(file, buf)
+        let filled = buf.len() as u64;
+        read_exact_padded(file, buf)
             .await
             .map_err(|source| fsx::Error::read(path, source))?;
-        left -= filled as u64;
-        *step_read = (*step_read + filled as u64).min(file_size);
-        progress.report(*step_read);
+        left -= filled;
+        *step_read = (*step_read + filled).min(file_size);
+        progress.report_offset(*step_read);
     }
 
     Ok(())
@@ -524,7 +493,7 @@ async fn stream_chunk_payload<F: FnMut(Amount)>(
 async fn read_exact_padded<R: AsyncRead + Unpin>(
     input: &mut R,
     buf: &mut [u8],
-) -> std::io::Result<usize> {
+) -> std::io::Result<()> {
     let total = buf.len();
     let mut offset = 0;
     while offset < total {
@@ -538,5 +507,33 @@ async fn read_exact_padded<R: AsyncRead + Unpin>(
             Err(err) => return Err(err),
         }
     }
-    Ok(total)
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::testutils::TestDir;
+
+    #[tokio::test]
+    async fn prepare_splits_respects_exact_max_download_boundary() {
+        let dir = TestDir::new("fastboot", "split-boundary");
+        let raw_path = dir.join("raw.bin");
+        fs::write(&raw_path, vec![0x11u8; 16384]).unwrap();
+
+        assert!(
+            prepare_splits(&raw_path, 16384, 16384)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let splits = prepare_splits(&raw_path, 16384, 8192)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(splits.len() >= 2);
+    }
 }

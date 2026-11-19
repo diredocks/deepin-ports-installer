@@ -1,14 +1,5 @@
-//! `rkdeveloptool`: write the Rockchip eMMC from MaskROM mode, which addresses the
-//! flash by sector offset rather than by partition name.
-//!
-//! ```text
-//! rkdeveloptool db <loader>          # download the loader into RAM
-//! rkdeveloptool wl 0x40000 <root>    # write the root image at sector 0x40000
-//! rkdeveloptool rd                   # reset the board
-//! ```
-//!
-//! The rockchip group (Radxa Rock 5 series, Rock 4D, DshanPi A1) needs this only
-//! for the on-board eMMC; its SD and NVMe media go through `dd-root`.
+//! `rkdeveloptool`: download a Rockchip MaskROM loader into RAM and write the
+//! root image at sector `0x40000` over RockUSB.
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -22,11 +13,11 @@ use rockusb::protocol::ResetOpcode;
 use shared::catalog::{Artifact, FlashVia, Role};
 use shared::fsx::{self, Amount};
 use shared::protocol::FlashPlan;
-use shared::targets::rockusb::DeviceInfo;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tokio::time::{Instant, sleep};
+use tokio::time::sleep;
 
+use super::{Progress, open_usb_device, reconnect_usb_device};
 use crate::{Error, Result};
 
 const CODE_471: u16 = 0x471;
@@ -35,22 +26,6 @@ const ROOT_SECTOR: u32 = 0x40000;
 const SECTOR_SIZE: usize = rockusb::protocol::SECTOR_SIZE as usize;
 const MAX_WRITE_SECTORS: usize = 128;
 const WRITE_CHUNK_SIZE: usize = MAX_WRITE_SECTORS * SECTOR_SIZE;
-const RECONNECT_SETTLE: Duration = Duration::from_secs(1);
-const RECONNECT_POLL: Duration = Duration::from_millis(250);
-const RECONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-
-struct Progress<'a, F: ?Sized> {
-    done: u64,
-    total: u64,
-    report: &'a mut F,
-}
-
-impl<F: FnMut(Amount) + ?Sized> Progress<'_, F> {
-    fn advance(&mut self, delta: u64) {
-        self.done += delta;
-        (self.report)(Amount::new(self.done, Some(self.total)));
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BootBlob {
@@ -80,17 +55,27 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
         .checked_add(root.size)
         .ok_or_else(|| Error::InvalidPlan("total write size overflows".into()))?;
 
-    let (mut device, previous) = open_device(&plan.target).await?;
-    let mut progress = Progress {
-        done: 0,
-        total,
-        report: &mut progress,
-    };
+    let (mut device, previous) = open_usb_device(
+        &plan.target,
+        "rockusb",
+        Error::Rockusb,
+        rockusb::nusb::devices,
+        rockusb::nusb::Device::from_usb_device_info,
+    )
+    .await?;
+    let mut progress = Progress::new(Some(total), &mut progress);
 
     download_boot(&mut device, &blobs, &mut progress).await?;
     drop(device);
 
-    let mut device = reconnect(&previous).await?;
+    let mut device = reconnect_usb_device(
+        &previous,
+        "rockusb",
+        Error::Rockusb,
+        rockusb::nusb::devices,
+        rockusb::nusb::Device::from_usb_device_info,
+    )
+    .await?;
     write_root_and_reset(
         &mut device,
         &root.path,
@@ -172,47 +157,6 @@ fn parse_entry(
     }
 
     Ok(blobs)
-}
-
-async fn open_device(target: &Path) -> Result<(rockusb::nusb::Device, DeviceInfo)> {
-    let mut devices = rockusb::nusb::devices()
-        .await
-        .map_err(|err| Error::Rockusb(format!("failed to enumerate USB devices: {err}")))?;
-    let info = devices
-        .find(|info| shared::targets::rockusb::matches(info, target))
-        .ok_or_else(|| {
-            Error::Rockusb(format!(
-                "no rockusb USB device matching `{}` found",
-                target.display()
-            ))
-        })?;
-
-    let device = rockusb::nusb::Device::from_usb_device_info(info.clone())
-        .await
-        .map_err(|err| Error::Rockusb(format!("failed to open rockusb USB device: {err}")))?;
-    Ok((device, info))
-}
-
-async fn reconnect(previous: &DeviceInfo) -> Result<rockusb::nusb::Device> {
-    sleep(RECONNECT_SETTLE).await;
-    let deadline = Instant::now() + RECONNECT_TIMEOUT;
-
-    loop {
-        if let Ok(mut devices) = rockusb::nusb::devices().await
-            && let Some(info) =
-                devices.find(|info| shared::targets::rockusb::same_port(previous, info))
-            && let Ok(device) = rockusb::nusb::Device::from_usb_device_info(info).await
-        {
-            return Ok(device);
-        }
-        if Instant::now() >= deadline {
-            return Err(Error::Rockusb(
-                "timed out waiting for rockusb device to reconnect".into(),
-            ));
-        }
-
-        sleep(RECONNECT_POLL).await;
-    }
 }
 
 async fn download_boot<T, F>(

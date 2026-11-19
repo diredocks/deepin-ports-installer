@@ -1,21 +1,10 @@
 //! Partitioned block-device writes (`dd-boot-root`, `dd-efi-root`, `dd-root`, `dd-th1520`, `dd-a733`):
-//! lay out a GPT partition table, then write each partition image (and any extra bootloader).
-//!
-//! | Method | Devices | Layout |
-//! |---|---|---|
-//! | `dd-boot-root` | eic7700 (SD, SATA, NVMe) | `p1` boot (>=2G) + `p2` root (rest) |
-//! | `dd-efi-root` | qcom | `p1` EFI (>=512M) + `p2` root (rest) |
-//! | `dd-root` | sg2042, sg2044, rockchip (SD, NVMe) | a single `root` partition |
-//! | `dd-th1520` | th1520 (TF card) | `p1` 2M reserved + `p2` boot (>=500M) + `p3` 4G swap + `p4` root (rest) |
-//! | `dd-a733` | a733 | `boot0` @ sector 256, `uboot` @ sector 24576, `p1` root @ sector 65536 |
+//! lay out a GPT partition table, then write each partition image and any extra bootloader.
 
 mod a733;
-mod boot_root;
-mod efi_root;
-mod root;
 mod th1520;
 
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use gptman::{GPT, GPTPartitionEntry};
@@ -23,9 +12,10 @@ use shared::catalog::{Artifact, FlashVia, Role};
 use shared::fsx::{self, Amount, BUFFER_SIZE};
 use shared::protocol::FlashPlan;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio::io::AsyncSeekExt;
 use uuid::{Builder, Uuid};
 
+use super::{Progress, copy};
 use crate::{Error, Result};
 
 const SECTOR_SIZE: u64 = 512;
@@ -47,15 +37,55 @@ struct PartitionSpec {
     ending_lba: u64,
 }
 
+impl PartitionSpec {
+    fn new(
+        name: &'static str,
+        type_guid: [u8; 16],
+        (starting_lba, ending_lba): (u64, u64),
+    ) -> Self {
+        Self {
+            name,
+            type_guid,
+            starting_lba,
+            ending_lba,
+        }
+    }
+}
+
 struct WriteSpec {
     sector: u64,
+    max_bytes: u64,
     path: PathBuf,
-    size: u64,
+}
+
+impl WriteSpec {
+    fn partition((start, end): (u64, u64), artifact: &Artifact) -> Self {
+        Self {
+            sector: start,
+            max_bytes: (end - start + 1) * SECTOR_SIZE,
+            path: artifact.path.clone(),
+        }
+    }
+
+    fn region(sector: u64, sectors: u64, artifact: &Artifact) -> Self {
+        Self {
+            sector,
+            max_bytes: sectors * SECTOR_SIZE,
+            path: artifact.path.clone(),
+        }
+    }
 }
 
 struct Layout {
     partitions: Vec<PartitionSpec>,
     writes: Vec<WriteSpec>,
+}
+
+struct TwoParts {
+    role: Role,
+    name: &'static str,
+    type_guid: [u8; 16],
+    min_sectors: u64,
 }
 
 pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
@@ -64,38 +94,36 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
 }
 
 async fn partition_target(plan: &FlashPlan) -> Result<(std::fs::File, Vec<WriteSpec>)> {
-    let target_path = plan.target.clone();
-    let via = plan.via;
-    let artifacts = plan.artifacts.clone();
+    let plan = plan.clone();
 
     tokio::task::spawn_blocking(move || -> Result<(std::fs::File, Vec<WriteSpec>)> {
         let mut target = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(&target_path)
-            .map_err(|source| fsx::Error::write(&target_path, source))?;
+            .open(&plan.target)
+            .map_err(|source| fsx::Error::write(&plan.target, source))?;
 
         let disk_bytes = target
             .seek(SeekFrom::End(0))
-            .map_err(|source| fsx::Error::write(&target_path, source))?;
+            .map_err(|source| fsx::Error::write(&plan.target, source))?;
         if disk_bytes < MIN_GPT_SECTORS * SECTOR_SIZE {
             return Err(Error::InvalidPlan(format!(
                 "target `{}` ({disk_bytes} bytes) is too small for a GPT partition table",
-                target_path.display()
+                plan.target.display()
             )));
         }
 
         GPT::write_protective_mbr_into(&mut target, SECTOR_SIZE)?;
         let mut gpt = GPT::new_from(&mut target, SECTOR_SIZE, random_guid()?)?;
 
-        let layout = build_layout(
-            via,
-            &artifacts,
+        let Layout { partitions, writes } = build_layout(
+            plan.via,
+            &plan.artifacts,
             gpt.header.first_usable_lba,
             gpt.header.last_usable_lba,
         )?;
 
-        for (index, part) in layout.partitions.into_iter().enumerate() {
+        for (index, part) in partitions.into_iter().enumerate() {
             let number = u32::try_from(index + 1)
                 .map_err(|_| Error::InvalidPlan("too many partitions".into()))?;
             gpt[number] = GPTPartitionEntry {
@@ -109,11 +137,7 @@ async fn partition_target(plan: &FlashPlan) -> Result<(std::fs::File, Vec<WriteS
         }
 
         gpt.write_into(&mut target)?;
-        target
-            .flush()
-            .map_err(|source| fsx::Error::write(&target_path, source))?;
-
-        Ok((target, layout.writes))
+        Ok((target, writes))
     })
     .await
     .map_err(|err| Error::Io(std::io::Error::other(err)))?
@@ -125,9 +149,24 @@ async fn write_regions(
     writes: &[WriteSpec],
     progress: &mut impl FnMut(Amount),
 ) -> Result<()> {
+    let mut total = 0u64;
+    for spec in writes {
+        let actual = tokio::fs::metadata(&spec.path)
+            .await
+            .map_err(|source| fsx::Error::read(&spec.path, source))?
+            .len();
+        if actual > spec.max_bytes {
+            return Err(Error::InvalidPlan(format!(
+                "`{}` ({actual} bytes) exceeds allocated region ({} bytes)",
+                spec.path.display(),
+                spec.max_bytes
+            )));
+        }
+        total += actual;
+    }
+
     let mut target = File::from_std(file);
-    let total: u64 = writes.iter().map(|spec| spec.size).sum();
-    let mut done = 0u64;
+    let mut progress = Progress::new(Some(total), progress);
     let mut buffer = vec![0u8; BUFFER_SIZE];
 
     for spec in writes {
@@ -140,29 +179,18 @@ async fn write_regions(
             .await
             .map_err(|source| fsx::Error::read(&spec.path, source))?;
 
-        loop {
-            let read = source
-                .read(&mut buffer)
-                .await
-                .map_err(|source| fsx::Error::read(&spec.path, source))?;
-            if read == 0 {
-                break;
-            }
-
-            target
-                .write_all(&buffer[..read])
-                .await
-                .map_err(|source| fsx::Error::write(target_path, source))?;
-
-            done += read as u64;
-            progress(Amount::new(done, Some(total)));
-        }
+        copy(
+            &mut source,
+            &spec.path,
+            &mut target,
+            target_path,
+            &mut buffer,
+            Some(spec.max_bytes),
+            |read| progress.advance(read),
+        )
+        .await?;
     }
 
-    target
-        .flush()
-        .await
-        .map_err(|source| fsx::Error::write(target_path, source))?;
     target
         .sync_all()
         .await
@@ -178,9 +206,29 @@ fn build_layout(
     last_usable: u64,
 ) -> Result<Layout> {
     match via {
-        FlashVia::DdBootRoot => boot_root::layout(artifacts, first_usable, last_usable),
-        FlashVia::DdEfiRoot => efi_root::layout(artifacts, first_usable, last_usable),
-        FlashVia::DdRoot => root::layout(artifacts, first_usable, last_usable),
+        FlashVia::DdBootRoot => layout_two_partitions(
+            artifacts,
+            first_usable,
+            last_usable,
+            TwoParts {
+                role: Role::Boot,
+                name: "boot",
+                type_guid: TYPE_LINUX_FS,
+                min_sectors: 2 * GIB_SECTORS,
+            },
+        ),
+        FlashVia::DdEfiRoot => layout_two_partitions(
+            artifacts,
+            first_usable,
+            last_usable,
+            TwoParts {
+                role: Role::Efi,
+                name: "efi",
+                type_guid: TYPE_EFI_SYSTEM,
+                min_sectors: 512 * MIB_SECTORS,
+            },
+        ),
+        FlashVia::DdRoot => layout_root(artifacts, first_usable, last_usable),
         FlashVia::DdTh1520 => th1520::layout(artifacts, first_usable, last_usable),
         FlashVia::DdA733 => a733::layout(artifacts, first_usable, last_usable),
         other => Err(Error::InvalidPlan(format!(
@@ -189,50 +237,39 @@ fn build_layout(
     }
 }
 
+fn layout_root(artifacts: &[Artifact], first_usable: u64, last_usable: u64) -> Result<Layout> {
+    let root = Artifact::by_role(artifacts, Role::Root)?;
+    let mut cursor = first_usable;
+    let p1 = allocate_rest(&mut cursor, sectors_for(root.size), last_usable, "root")?;
+
+    Ok(Layout {
+        partitions: vec![PartitionSpec::new("root", TYPE_LINUX_FS, p1)],
+        writes: vec![WriteSpec::partition(p1, root)],
+    })
+}
+
 fn layout_two_partitions(
     artifacts: &[Artifact],
     first_usable: u64,
     last_usable: u64,
-    first_role: Role,
-    first_name: &'static str,
-    first_type: [u8; 16],
-    first_min_sectors: u64,
+    first_spec: TwoParts,
 ) -> Result<Layout> {
-    let first = Artifact::by_role(artifacts, first_role)?;
+    let first = Artifact::by_role(artifacts, first_spec.role)?;
     let root = Artifact::by_role(artifacts, Role::Root)?;
 
     let mut cursor = first_usable;
-    let first_sectors = first_min_sectors.max(sectors_for(first.size));
-    let (p1_start, p1_end) = allocate_fixed(&mut cursor, first_sectors, last_usable, first_name)?;
-    let (p2_start, p2_end) =
-        allocate_rest(&mut cursor, sectors_for(root.size), last_usable, "root")?;
+    let first_sectors = first_spec.min_sectors.max(sectors_for(first.size));
+    let p1 = allocate_fixed(&mut cursor, first_sectors, last_usable, first_spec.name)?;
+    let p2 = allocate_rest(&mut cursor, sectors_for(root.size), last_usable, "root")?;
 
     Ok(Layout {
         partitions: vec![
-            PartitionSpec {
-                name: first_name,
-                type_guid: first_type,
-                starting_lba: p1_start,
-                ending_lba: p1_end,
-            },
-            PartitionSpec {
-                name: "root",
-                type_guid: TYPE_LINUX_FS,
-                starting_lba: p2_start,
-                ending_lba: p2_end,
-            },
+            PartitionSpec::new(first_spec.name, first_spec.type_guid, p1),
+            PartitionSpec::new("root", TYPE_LINUX_FS, p2),
         ],
         writes: vec![
-            WriteSpec {
-                sector: p1_start,
-                path: first.path.clone(),
-                size: first.size,
-            },
-            WriteSpec {
-                sector: p2_start,
-                path: root.path.clone(),
-                size: root.size,
-            },
+            WriteSpec::partition(p1, first),
+            WriteSpec::partition(p2, root),
         ],
     })
 }
@@ -280,4 +317,42 @@ fn random_guid() -> Result<[u8; 16]> {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes)?;
     Ok(Builder::from_random_bytes(bytes).into_uuid().to_bytes_le())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use super::*;
+    use crate::testutils::TestDir;
+
+    #[tokio::test]
+    async fn rejects_region_write_when_file_exceeds_allocated_limit() {
+        let dir = TestDir::new("partitions", "oversized-region");
+        let source_path = dir.join("root.img");
+        let target_path = dir.join("disk.img");
+
+        fs::write(&source_path, vec![0xABu8; 512]).unwrap();
+        fs::write(&target_path, vec![0u8; 256 * 1024]).unwrap();
+
+        let plan = FlashPlan {
+            via: FlashVia::DdRoot,
+            target: target_path.clone(),
+            artifacts: vec![Artifact {
+                path: source_path.clone(),
+                role: Role::Root,
+                size: 512,
+            }],
+        };
+
+        let (file, mut writes) = partition_target(&plan).await.unwrap();
+        writes[0].max_bytes = 512;
+        fs::write(&source_path, vec![0xCDu8; 1024]).unwrap();
+
+        let err = write_regions(Path::new(&target_path), file, &writes, &mut |_| {})
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::InvalidPlan(_)));
+    }
 }

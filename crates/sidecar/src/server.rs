@@ -12,23 +12,27 @@ use std::net::Ipv4Addr;
 use std::pin::pin;
 
 use futures_util::{SinkExt, StreamExt};
+use shared::fsx::Amount;
+use shared::protocol::{Handshake, Reply, Request};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::time::{Duration, timeout};
-use tokio_tungstenite::{WebSocketStream, accept_hdr_async};
-use tungstenite::Message;
-use tungstenite::handshake::server::{
+use tokio::time::{Duration, Instant, timeout};
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::handshake::server::{
     ErrorResponse, Request as HandshakeRequest, Response as HandshakeResponse,
 };
-use tungstenite::http::{Response as HttpResponse, StatusCode};
+use tokio_tungstenite::tungstenite::http::{Response as HttpResponse, StatusCode};
+use tokio_tungstenite::{WebSocketStream, accept_hdr_async};
 
 use crate::driver;
 use crate::{Error, Result};
-use shared::fsx::Amount;
-use shared::protocol::FlashPlan;
-use shared::protocol::{Handshake, Reply, Request};
 
-/// How long to wait for the client to connect.
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(120);
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
+
+enum Flow {
+    Continue,
+    Stop,
+}
 
 /// Run the sidecar until the client stops it or disconnects.
 pub fn serve() -> Result<()> {
@@ -37,29 +41,26 @@ pub fn serve() -> Result<()> {
         .build()
         .map_err(Error::Io)?;
 
-    let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(Error::Io)?;
-    listener.set_nonblocking(true).map_err(Error::Io)?;
+    runtime.block_on(async {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .map_err(Error::Io)?;
 
-    let handshake = Handshake {
-        address: listener.local_addr().map_err(Error::Io)?.to_string(),
-        token: random_token()?,
-    };
+        let handshake = Handshake {
+            address: listener.local_addr().map_err(Error::Io)?.to_string(),
+            token: random_token()?,
+        };
 
-    let json = serde_json::to_string(&handshake)?;
-    let mut stdout = io::stdout().lock();
-    writeln!(stdout, "{json}").map_err(Error::Io)?;
-    stdout.flush().map_err(Error::Io)?;
+        let json = serde_json::to_string(&handshake)?;
+        let mut stdout = io::stdout().lock();
+        writeln!(stdout, "{json}").map_err(Error::Io)?;
+        stdout.flush().map_err(Error::Io)?;
+        drop(stdout);
 
-    runtime.block_on(serve_on(listener, &handshake.token))
+        serve_socket(accept_client(listener, &handshake.token).await?).await
+    })
 }
 
-/// Serve one authenticated client.
-async fn serve_on(listener: std::net::TcpListener, token: &str) -> Result<()> {
-    let listener = TcpListener::from_std(listener).map_err(Error::Io)?;
-    serve_socket(accept_client(listener, token).await?).await
-}
-
-/// Accept one client and complete the WebSocket handshake.
 // The tungstenite handshake callback must return a full HTTP response as its
 // error type; boxing it would require wrapping the callback.
 #[allow(clippy::result_large_err)]
@@ -83,7 +84,6 @@ async fn accept_client(listener: TcpListener, token: &str) -> Result<WebSocketSt
     .map_err(|err| Error::Protocol(format!("handshake failed: {err}")))
 }
 
-/// Read requests until the client shuts the helper down or disconnects.
 async fn serve_socket(mut socket: WebSocketStream<TcpStream>) -> Result<()> {
     while let Some(message) = socket.next().await {
         let text = match message.map_err(Error::WebSocket)? {
@@ -92,7 +92,10 @@ async fn serve_socket(mut socket: WebSocketStream<TcpStream>) -> Result<()> {
             _ => continue,
         };
 
-        if handle_request(&mut socket, text.as_str()).await? {
+        if matches!(
+            handle_request(&mut socket, text.as_str()).await?,
+            Flow::Stop
+        ) {
             break;
         }
     }
@@ -100,14 +103,23 @@ async fn serve_socket(mut socket: WebSocketStream<TcpStream>) -> Result<()> {
     Ok(())
 }
 
-/// Handle one request, returning whether the helper should stop.
-async fn handle_request(socket: &mut WebSocketStream<TcpStream>, text: &str) -> Result<bool> {
+async fn handle_request(socket: &mut WebSocketStream<TcpStream>, text: &str) -> Result<Flow> {
     let request: Request = serde_json::from_str(text)
         .map_err(|err| Error::Protocol(format!("invalid request: {err}")))?;
 
     match request {
-        Request::Flash { plan } => handle_flash(socket, plan).await,
-        Request::Shutdown => Ok(true),
+        Request::Flash { plan } => {
+            let (tx, rx) = tokio::sync::watch::channel(Amount::default());
+            drive_flash(
+                socket,
+                rx,
+                driver::write(&plan, |amount| {
+                    let _ = tx.send(amount);
+                }),
+            )
+            .await
+        }
+        Request::Shutdown => Ok(Flow::Stop),
     }
 }
 
@@ -119,42 +131,48 @@ async fn send_reply(socket: &mut WebSocketStream<TcpStream>, reply: &Reply) -> R
         .map_err(Error::WebSocket)
 }
 
-/// Run a flash job, streaming its progress to the client.
-async fn handle_flash(socket: &mut WebSocketStream<TcpStream>, plan: FlashPlan) -> Result<bool> {
-    let (tx, rx) = tokio::sync::watch::channel(Amount::default());
-    drive_flash(
-        socket,
-        rx,
-        driver::write(&plan, |amount| {
-            let _ = tx.send(amount);
-        }),
-    )
-    .await
-}
-
 async fn drive_flash(
     socket: &mut WebSocketStream<TcpStream>,
     mut rx: tokio::sync::watch::Receiver<Amount>,
     write: impl Future<Output = Result<()>>,
-) -> Result<bool> {
+) -> Result<Flow> {
     let mut write = pin!(write);
     let mut progress_open = true;
+    let mut pending_progress = false;
+    let mut last_sent: Option<Instant> = None;
+    let mut throttle = pin!(tokio::time::sleep(Duration::ZERO));
 
     let outcome = loop {
         tokio::select! {
             result = &mut write => break result,
-            changed = rx.changed(), if progress_open => {
+            changed = rx.changed(), if progress_open && !pending_progress => {
                 match changed {
                     Ok(()) => {
-                        let amount = *rx.borrow_and_update();
-                        send_reply(socket, &Reply::Progress { amount }).await?;
+                        let now = Instant::now();
+                        match last_sent {
+                            Some(prev) if now.duration_since(prev) < PROGRESS_INTERVAL => {
+                                pending_progress = true;
+                                throttle.as_mut().reset(prev + PROGRESS_INTERVAL);
+                            }
+                            _ => {
+                                let amount = *rx.borrow_and_update();
+                                send_reply(socket, &Reply::Progress { amount }).await?;
+                                last_sent = Some(now);
+                            }
+                        }
                     }
                     Err(_) => progress_open = false,
                 }
             }
+            () = &mut throttle, if pending_progress => {
+                pending_progress = false;
+                let amount = *rx.borrow_and_update();
+                send_reply(socket, &Reply::Progress { amount }).await?;
+                last_sent = Some(Instant::now());
+            }
             incoming = socket.next() => {
                 match incoming {
-                    Some(Ok(Message::Close(_))) | None => return Ok(true),
+                    Some(Ok(Message::Close(_))) | None => return Ok(Flow::Stop),
                     Some(Err(err)) => return Err(Error::WebSocket(err)),
                     Some(Ok(_)) => {}
                 }
@@ -162,7 +180,7 @@ async fn drive_flash(
         }
     };
 
-    if rx.has_changed().unwrap_or(false) {
+    if pending_progress || rx.has_changed().unwrap_or(false) {
         let amount = *rx.borrow_and_update();
         send_reply(socket, &Reply::Progress { amount }).await?;
     }
@@ -175,20 +193,17 @@ async fn drive_flash(
     };
 
     send_reply(socket, &reply).await?;
-    Ok(false)
+    Ok(Flow::Continue)
 }
 
-/// Whether the WebSocket request carries the expected token.
 fn authorized(request: &HandshakeRequest, token: &str) -> bool {
-    let Some(query) = request.uri().query() else {
-        return false;
-    };
-
-    url::form_urlencoded::parse(query.as_bytes())
-        .any(|(key, value)| key == "token" && value == token)
+    request.uri().query().is_some_and(|query| {
+        query
+            .split('&')
+            .any(|pair| pair.strip_prefix("token=") == Some(token))
+    })
 }
 
-/// Build the response used to reject a connection with a bad token.
 fn unauthorized() -> ErrorResponse {
     HttpResponse::builder()
         .status(StatusCode::UNAUTHORIZED)
@@ -196,7 +211,6 @@ fn unauthorized() -> ErrorResponse {
         .expect("the unauthorized response is always valid")
 }
 
-/// Generate a 256-bit token from the OS CSPRNG, hex encoded.
 fn random_token() -> Result<String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes)?;
@@ -210,32 +224,47 @@ fn random_token() -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{TcpListener as StdListener, TcpStream};
+    use std::net::TcpStream as StdTcpStream;
     use std::thread;
 
+    use shared::protocol::FlashPlan;
+    use tokio_tungstenite::tungstenite;
+
     use super::*;
+    use crate::testutils::TestDir;
 
-    type Socket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
+    type Socket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<StdTcpStream>>;
 
-    fn start() -> (Handshake, thread::JoinHandle<Result<()>>) {
-        let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-        listener.set_nonblocking(true).unwrap();
-
-        let handshake = Handshake {
-            address: listener.local_addr().unwrap().to_string(),
-            token: "test-token".into(),
-        };
-        let token = handshake.token.clone();
-
+    fn spawn_server<T, F, Fut>(task: F) -> (Handshake, thread::JoinHandle<Result<T>>)
+    where
+        T: Send + 'static,
+        F: FnOnce(WebSocketStream<TcpStream>) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T>>,
+    {
+        let (tx, rx) = std::sync::mpsc::channel();
         let server = thread::spawn(move || {
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(serve_on(listener, &token))
+                .block_on(async move {
+                    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+                    let handshake = Handshake {
+                        address: listener.local_addr().unwrap().to_string(),
+                        token: "test-token".into(),
+                    };
+                    let token = handshake.token.clone();
+                    tx.send(handshake).unwrap();
+                    let socket = accept_client(listener, &token).await?;
+                    task(socket).await
+                })
         });
 
-        (handshake, server)
+        (rx.recv().unwrap(), server)
+    }
+
+    fn start() -> (Handshake, thread::JoinHandle<Result<()>>) {
+        spawn_server(serve_socket)
     }
 
     fn connect(handshake: &Handshake) -> Socket {
@@ -249,28 +278,6 @@ mod tests {
 
         assert!(tungstenite::connect(url).is_err());
         assert!(server.join().unwrap().is_err());
-    }
-
-    struct TestDir {
-        path: std::path::PathBuf,
-    }
-
-    impl TestDir {
-        fn new(name: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "deepin-ports-sidecar-server-{}-{name}",
-                std::process::id()
-            ));
-            let _ = std::fs::remove_dir_all(&path);
-            std::fs::create_dir_all(&path).expect("create test directory");
-            Self { path }
-        }
-    }
-
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.path);
-        }
     }
 
     fn send_request(socket: &mut Socket, request: &Request) {
@@ -287,9 +294,9 @@ mod tests {
 
     #[test]
     fn streams_flash_progress_and_finishes_with_ok() {
-        let dir = TestDir::new("flash-ok");
-        let image = dir.path.join("disk.img");
-        let target = dir.path.join("target.bin");
+        let dir = TestDir::new("server", "flash-ok");
+        let image = dir.join("disk.img");
+        let target = dir.join("target.bin");
         let payload = b"whole-disk-payload";
         std::fs::write(&image, payload).unwrap();
         std::fs::write(&target, vec![0u8; payload.len()]).unwrap();
@@ -332,8 +339,8 @@ mod tests {
 
     #[test]
     fn returns_error_reply_for_invalid_flash_plan_and_stays_alive() {
-        let dir = TestDir::new("flash-err");
-        let target = dir.path.join("target.bin");
+        let dir = TestDir::new("server", "flash-err");
+        let target = dir.join("target.bin");
         std::fs::write(&target, b"placeholder").unwrap();
 
         let (handshake, server) = start();
@@ -355,7 +362,36 @@ mod tests {
         server.join().unwrap().unwrap();
     }
 
-    fn run_disconnect_case(close_cleanly: bool) -> (Result<bool>, bool) {
+    #[test]
+    fn throttles_burst_progress_and_flushes_final_amount() {
+        let (handshake, server) = spawn_server(|mut socket| async move {
+            let (tx, rx) = tokio::sync::watch::channel(Amount::default());
+            let write = async move {
+                for done in 1..=20u64 {
+                    let _ = tx.send(Amount::new(done, Some(20)));
+                    tokio::task::yield_now().await;
+                }
+                Ok(())
+            };
+            drive_flash(&mut socket, rx, write).await
+        });
+
+        let mut client = connect(&handshake);
+        let mut progress = Vec::new();
+        loop {
+            match read_reply(&mut client) {
+                Reply::Progress { amount } => progress.push(amount),
+                Reply::Ok => break,
+                other => panic!("unexpected reply: {other:?}"),
+            }
+        }
+
+        assert_eq!(progress.last(), Some(&Amount::new(20, Some(20))));
+        assert!(progress.len() < 20);
+        assert!(matches!(server.join().unwrap(), Ok(Flow::Continue)));
+    }
+
+    fn run_disconnect_case(close_cleanly: bool) -> (Result<Flow>, bool) {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -367,33 +403,17 @@ mod tests {
             }
         }
 
-        let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let handshake = Handshake {
-            address: listener.local_addr().unwrap().to_string(),
-            token: "test-token".into(),
-        };
-        let token = handshake.token.clone();
-
         let cancelled = Arc::new(AtomicBool::new(false));
         let worker_cancelled = Arc::clone(&cancelled);
 
-        let server = thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async move {
-                    let listener = TcpListener::from_std(listener).unwrap();
-                    let mut socket = accept_client(listener, &token).await?;
-                    let (tx, rx) = tokio::sync::watch::channel(Amount::default());
-                    let write = async move {
-                        let _guard = DropFlag(worker_cancelled);
-                        let _ = tx.send(Amount::new(1, Some(2)));
-                        std::future::pending::<Result<()>>().await
-                    };
-                    drive_flash(&mut socket, rx, write).await
-                })
+        let (handshake, server) = spawn_server(move |mut socket| async move {
+            let (tx, rx) = tokio::sync::watch::channel(Amount::default());
+            let write = async move {
+                let _guard = DropFlag(worker_cancelled);
+                let _ = tx.send(Amount::new(1, Some(2)));
+                std::future::pending::<Result<()>>().await
+            };
+            drive_flash(&mut socket, rx, write).await
         });
 
         let mut client = connect(&handshake);
@@ -416,7 +436,7 @@ mod tests {
     #[test]
     fn cancels_flash_when_client_closes_cleanly() {
         let (outcome, cancelled) = run_disconnect_case(true);
-        assert!(outcome.unwrap());
+        assert!(matches!(outcome, Ok(Flow::Stop)));
         assert!(cancelled);
     }
 

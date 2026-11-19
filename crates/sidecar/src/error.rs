@@ -1,12 +1,7 @@
+use tokio_tungstenite::tungstenite;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("failed to run `{program}`")]
-    Command {
-        program: String,
-        #[source]
-        source: std::io::Error,
-    },
-
     #[error("sidecar I/O failed")]
     Io(#[source] std::io::Error),
 

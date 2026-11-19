@@ -1,22 +1,13 @@
-//! `dd-whole`: write a single whole-disk image, as `dd if=<img> of=/dev/sdX`.
-//!
-//! jh7110 (VisionFive 2, MilkV Mars, DC ROMA) and phytiumpi ship one `*.img` that
-//! already carries the partition table and the bootloader.
-//!
-//! Also backs `iso-write`: the generic group (QEMU, MilkV Titan, UltraRISC
-//! DP1000, Sophgo SG2044) ships one `*.iso` that boots as it is. RISC-V boards
-//! cannot boot a Ventoy stick, so the medium is written directly — the same
-//! whole-disk stream, from offset 0.
+//! `dd-whole` and `iso-write`: stream a single whole-disk or ISO image from offset 0.
 
 use shared::catalog::{Artifact, Role};
 use shared::fsx::{self, Amount, BUFFER_SIZE};
 use shared::protocol::FlashPlan;
 use tokio::fs::{File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+use super::{Progress, copy};
 use crate::{Error, Result};
 
-/// Stream a single whole-disk image artifact to `plan.target` from offset 0.
 pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
     let artifact = disk_artifact(&plan.artifacts)?;
 
@@ -34,30 +25,18 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
         .map_err(|source| fsx::Error::write(&plan.target, source))?;
 
     let mut buffer = vec![0u8; BUFFER_SIZE];
-    let mut done = 0u64;
-    loop {
-        let read = source
-            .read(&mut buffer)
-            .await
-            .map_err(|source| fsx::Error::read(&artifact.path, source))?;
+    let mut progress = Progress::new(total, &mut progress);
+    copy(
+        &mut source,
+        &artifact.path,
+        &mut target,
+        &plan.target,
+        &mut buffer,
+        None,
+        |read| progress.advance(read),
+    )
+    .await?;
 
-        if read == 0 {
-            break;
-        }
-
-        target
-            .write_all(&buffer[..read])
-            .await
-            .map_err(|source| fsx::Error::write(&plan.target, source))?;
-
-        done += read as u64;
-        progress(Amount::new(done, total));
-    }
-
-    target
-        .flush()
-        .await
-        .map_err(|source| fsx::Error::write(&plan.target, source))?;
     target
         .sync_all()
         .await
@@ -83,37 +62,12 @@ fn disk_artifact(artifacts: &[Artifact]) -> Result<&Artifact> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use shared::catalog::FlashVia;
 
     use super::*;
-
-    struct TestDir {
-        path: PathBuf,
-    }
-
-    impl TestDir {
-        fn new(name: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "deepin-ports-sidecar-whole-{}-{name}",
-                std::process::id()
-            ));
-            let _ = fs::remove_dir_all(&path);
-            fs::create_dir_all(&path).expect("create test directory");
-            Self { path }
-        }
-
-        fn join(&self, name: &str) -> PathBuf {
-            self.path.join(name)
-        }
-    }
-
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
+    use crate::testutils::TestDir;
 
     fn plan(target: &Path, artifacts: Vec<Artifact>) -> FlashPlan {
         FlashPlan {
@@ -133,7 +87,7 @@ mod tests {
 
     #[tokio::test]
     async fn writes_disk_image_from_offset_zero_without_truncating_and_reports_progress() {
-        let dir = TestDir::new("write-disk");
+        let dir = TestDir::new("whole", "write-disk");
         let image_path = dir.join("disk.img");
         let target_path = dir.join("target.bin");
 
@@ -160,14 +114,17 @@ mod tests {
         assert!(!reports.is_empty());
         assert_eq!(
             reports.last(),
-            Some(&Amount::new(payload.len() as u64, Some(payload.len() as u64)))
+            Some(&Amount::new(
+                payload.len() as u64,
+                Some(payload.len() as u64)
+            ))
         );
         assert!(reports.windows(2).all(|w| w[0].done < w[1].done));
     }
 
     #[tokio::test]
     async fn writes_an_iso_like_a_whole_disk() {
-        let dir = TestDir::new("write-iso");
+        let dir = TestDir::new("whole", "write-iso");
         let image_path = dir.join("image.iso");
         let target_path = dir.join("target.bin");
         let payload = b"bootable iso";
@@ -186,7 +143,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_invalid_artifact_plans() {
-        let dir = TestDir::new("invalid-plan");
+        let dir = TestDir::new("whole", "invalid-plan");
         let target_path = dir.join("target.bin");
         fs::write(&target_path, b"placeholder").unwrap();
 
@@ -220,7 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn refuses_to_create_missing_target() {
-        let dir = TestDir::new("missing-target");
+        let dir = TestDir::new("whole", "missing-target");
         let image_path = dir.join("disk.img");
         let target_path = dir.join("missing.bin");
         fs::write(&image_path, b"whole disk image").unwrap();

@@ -1870,8 +1870,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite",
- "tungstenite",
- "url",
  "uuid",
 ]
 

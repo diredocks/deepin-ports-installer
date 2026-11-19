@@ -33,32 +33,14 @@ pub(super) fn layout(
     }
 
     let mut cursor = ROOT_SECTOR;
-    let (p1_start, p1_end) =
-        allocate_rest(&mut cursor, sectors_for(root.size), last_usable, "root")?;
+    let p1 = allocate_rest(&mut cursor, sectors_for(root.size), last_usable, "root")?;
 
     Ok(Layout {
-        partitions: vec![PartitionSpec {
-            name: "root",
-            type_guid: TYPE_LINUX_FS,
-            starting_lba: p1_start,
-            ending_lba: p1_end,
-        }],
+        partitions: vec![PartitionSpec::new("root", TYPE_LINUX_FS, p1)],
         writes: vec![
-            WriteSpec {
-                sector: BOOT0_SECTOR,
-                path: boot0.path.clone(),
-                size: boot0.size,
-            },
-            WriteSpec {
-                sector: UBOOT_SECTOR,
-                path: uboot.path.clone(),
-                size: uboot.size,
-            },
-            WriteSpec {
-                sector: p1_start,
-                path: root.path.clone(),
-                size: root.size,
-            },
+            WriteSpec::region(BOOT0_SECTOR, UBOOT_SECTOR - BOOT0_SECTOR, boot0),
+            WriteSpec::region(UBOOT_SECTOR, ROOT_SECTOR - UBOOT_SECTOR, uboot),
+            WriteSpec::partition(p1, root),
         ],
     })
 }

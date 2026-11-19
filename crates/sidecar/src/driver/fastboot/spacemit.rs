@@ -2,7 +2,7 @@ use std::path::Path;
 
 use shared::catalog::{Artifact, Role};
 
-use super::{Step, flash_step};
+use super::{Step, flash_step, stage_step};
 use crate::Result;
 
 const PARTITIONS_MTD: &str = r#"{
@@ -125,18 +125,10 @@ fn is_spi_bootinfo(path: &Path) -> bool {
 
 pub(super) fn steps(artifacts: &[Artifact]) -> Result<Vec<Step>> {
     let bootinfo = Artifact::by_role(artifacts, Role::Bootinfo)?;
-    let fsbl = Artifact::by_role(artifacts, Role::Fsbl)?;
-    let uboot = Artifact::by_role(artifacts, Role::Uboot)?;
 
     let mut steps = vec![
-        Step::StageAndContinue {
-            path: fsbl.path.clone(),
-            size: fsbl.size,
-        },
-        Step::StageAndContinue {
-            path: uboot.path.clone(),
-            size: uboot.size,
-        },
+        stage_step(artifacts, Role::Fsbl)?,
+        stage_step(artifacts, Role::Uboot)?,
     ];
 
     if is_spi_bootinfo(&bootinfo.path) {
@@ -156,23 +148,11 @@ pub(super) fn steps(artifacts: &[Artifact]) -> Result<Vec<Step>> {
     }
 
     steps.extend([
-        Step::Flash {
-            partition: "bootinfo",
-            path: bootinfo.path.clone(),
-            size: bootinfo.size,
-        },
-        Step::Flash {
-            partition: "fsbl",
-            path: fsbl.path.clone(),
-            size: fsbl.size,
-        },
+        flash_step(artifacts, "bootinfo", Role::Bootinfo)?,
+        flash_step(artifacts, "fsbl", Role::Fsbl)?,
         flash_step(artifacts, "env", Role::Env)?,
         flash_step(artifacts, "opensbi", Role::Opensbi)?,
-        Step::Flash {
-            partition: "uboot",
-            path: uboot.path.clone(),
-            size: uboot.size,
-        },
+        flash_step(artifacts, "uboot", Role::Uboot)?,
         flash_step(artifacts, "bootfs", Role::Boot)?,
         flash_step(artifacts, "rootfs", Role::Root)?,
     ]);
