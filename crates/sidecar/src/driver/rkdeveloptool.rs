@@ -10,10 +10,13 @@
 //! The rockchip group (Radxa Rock 5 series, Rock 4D, DshanPi A1) needs this only
 //! for the on-board eMMC; its SD and NVMe media go through `dd-root`.
 
-use std::io::SeekFrom;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::Duration;
 
+use rockfile::boot::{
+    RkBootEntry, RkBootEntryBytes, RkBootHeader, RkBootHeaderBytes, RkBootHeaderEntry,
+};
 use rockusb::device::{DeviceAsync, TransportAsync};
 use rockusb::protocol::ResetOpcode;
 use shared::catalog::{Artifact, FlashVia, Role};
@@ -21,7 +24,7 @@ use shared::fsx::{self, Amount};
 use shared::protocol::FlashPlan;
 use shared::targets::rockusb::DeviceInfo;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio::io::AsyncReadExt;
 use tokio::time::{Instant, sleep};
 
 use crate::{Error, Result};
@@ -32,8 +35,6 @@ const ROOT_SECTOR: u32 = 0x40000;
 const SECTOR_SIZE: usize = rockusb::protocol::SECTOR_SIZE as usize;
 const MAX_WRITE_SECTORS: usize = 128;
 const WRITE_CHUNK_SIZE: usize = MAX_WRITE_SECTORS * SECTOR_SIZE;
-const BOOT_HEADER_LEN: usize = 102;
-const BOOT_ENTRY_LEN: usize = 57;
 const RECONNECT_SETTLE: Duration = Duration::from_secs(1);
 const RECONNECT_POLL: Duration = Duration::from_millis(250);
 const RECONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -58,23 +59,6 @@ struct BootBlob {
     delay: Duration,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct BootEntryHeader {
-    count: u8,
-    offset: u32,
-    size: u8,
-}
-
-impl BootEntryHeader {
-    fn from_bytes(bytes: &[u8]) -> Self {
-        Self {
-            count: bytes[0],
-            offset: u32::from_le_bytes(bytes[1..5].try_into().expect("4-byte entry offset")),
-            size: bytes[5],
-        }
-    }
-}
-
 pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
     if plan.via != FlashVia::Rkdeveloptool {
         return Err(Error::InvalidPlan(format!(
@@ -86,7 +70,7 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
     let loader = Artifact::by_role(&plan.artifacts, Role::Loader)?;
     let root = Artifact::by_role(&plan.artifacts, Role::Root)?;
 
-    let blobs = parse_loader(&loader.path).await?;
+    let blobs = parse_loader(&loader.path)?;
     let mut root_file = File::open(&root.path)
         .await
         .map_err(|source| fsx::Error::read(&root.path, source))?;
@@ -117,106 +101,77 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
     .await
 }
 
-async fn parse_loader(path: &Path) -> Result<Vec<BootBlob>> {
-    let mut file = File::open(path)
-        .await
-        .map_err(|source| fsx::Error::read(path, source))?;
-    let file_len = file
-        .metadata()
-        .await
-        .map_err(|source| fsx::Error::read(path, source))?
-        .len();
-
-    let mut header = [0u8; BOOT_HEADER_LEN];
-    read_exact_boot_bytes(&mut file, path, &mut header, "header").await?;
-
-    if &header[0..4] != b"BOOT" && &header[0..4] != b"LDR " {
-        return Err(Error::InvalidPlan(format!(
-            "invalid Rockchip loader header in `{}`",
+fn parse_loader(path: &Path) -> Result<Vec<BootBlob>> {
+    let invalid = |msg: &str| {
+        Error::InvalidPlan(format!(
+            "invalid Rockchip loader `{}`: {msg}",
             path.display()
-        )));
-    }
-
-    let entry_471 = BootEntryHeader::from_bytes(&header[25..31]);
-    let entry_472 = BootEntryHeader::from_bytes(&header[31..37]);
-
-    let mut blobs = Vec::new();
-    for (area, entry_header) in [(CODE_471, entry_471), (CODE_472, entry_472)] {
-        if entry_header.count > 0 && usize::from(entry_header.size) < BOOT_ENTRY_LEN {
-            return Err(Error::InvalidPlan(format!(
-                "invalid Rockchip boot entry size ({}) in `{}`",
-                entry_header.size,
-                path.display()
-            )));
+        ))
+    };
+    let map_io = |err: std::io::Error| match err.kind() {
+        std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof => {
+            invalid(&err.to_string())
         }
+        _ => fsx::Error::read(path, err).into(),
+    };
 
-        for index in 0..entry_header.count {
-            let entry_offset = u64::from(entry_header.offset)
-                .checked_add(u64::from(entry_header.size) * u64::from(index))
-                .ok_or_else(|| {
-                    Error::InvalidPlan(format!(
-                        "Rockchip boot entry offset overflow in `{}`",
-                        path.display()
-                    ))
-                })?;
+    let mut file = std::fs::File::open(path).map_err(map_io)?;
+    let mut header: RkBootHeaderBytes = [0; size_of::<RkBootHeaderBytes>()];
+    file.read_exact(&mut header).map_err(map_io)?;
 
-            file.seek(SeekFrom::Start(entry_offset))
-                .await
-                .map_err(|source| fsx::Error::read(path, source))?;
+    let header = RkBootHeader::from_bytes(&header).ok_or_else(|| invalid("invalid header"))?;
 
-            let mut entry = [0u8; BOOT_ENTRY_LEN];
-            read_exact_boot_bytes(&mut file, path, &mut entry, "boot entry").await?;
-
-            let data_offset = u32::from_le_bytes(entry[45..49].try_into().unwrap());
-            let data_size = u32::from_le_bytes(entry[49..53].try_into().unwrap());
-            let data_delay = u32::from_le_bytes(entry[53..57].try_into().unwrap());
-
-            let end = u64::from(data_offset).checked_add(u64::from(data_size));
-            if !end.is_some_and(|end| end <= file_len) {
-                return Err(Error::InvalidPlan(format!(
-                    "truncated boot payload in Rockchip loader `{}`",
-                    path.display()
-                )));
-            }
-
-            file.seek(SeekFrom::Start(u64::from(data_offset)))
-                .await
-                .map_err(|source| fsx::Error::read(path, source))?;
-
-            let mut data = vec![0u8; data_size as usize];
-            read_exact_boot_bytes(&mut file, path, &mut data, "boot payload").await?;
-
-            blobs.push(BootBlob {
-                area,
-                data,
-                delay: Duration::from_millis(u64::from(data_delay)),
-            });
-        }
-    }
+    let mut blobs = parse_entry(header.entry_471, CODE_471, &mut file).map_err(map_io)?;
+    blobs.extend(parse_entry(header.entry_472, CODE_472, &mut file).map_err(map_io)?);
 
     if blobs.is_empty() {
-        return Err(Error::InvalidPlan(format!(
-            "Rockchip loader `{}` contains no MaskROM boot entries",
-            path.display()
-        )));
+        return Err(invalid("contains no MaskROM boot entries"));
     }
 
     Ok(blobs)
 }
 
-async fn read_exact_boot_bytes(
-    file: &mut File,
-    path: &Path,
-    buf: &mut [u8],
-    what: &str,
-) -> Result<()> {
-    match file.read_exact(buf).await {
-        Ok(_) => Ok(()),
-        Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => Err(Error::InvalidPlan(
-            format!("truncated {what} in Rockchip loader `{}`", path.display()),
-        )),
-        Err(source) => Err(fsx::Error::read(path, source).into()),
+fn parse_entry(
+    header: RkBootHeaderEntry,
+    area: u16,
+    file: &mut std::fs::File,
+) -> std::io::Result<Vec<BootBlob>> {
+    if header.count > 0 && usize::from(header.size) < size_of::<RkBootEntryBytes>() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("invalid boot entry size ({})", header.size),
+        ));
     }
+
+    let mut blobs = Vec::with_capacity(usize::from(header.count));
+    for i in 0..header.count {
+        let mut entry: RkBootEntryBytes = [0; size_of::<RkBootEntryBytes>()];
+        file.seek(SeekFrom::Start(
+            u64::from(header.offset) + u64::from(header.size) * u64::from(i),
+        ))?;
+        file.read_exact(&mut entry)?;
+        let entry = RkBootEntry::from_bytes(&entry);
+
+        file.seek(SeekFrom::Start(u64::from(entry.data_offset)))?;
+        let mut data = Vec::new();
+        file.by_ref()
+            .take(u64::from(entry.data_size))
+            .read_to_end(&mut data)?;
+        if data.len() != entry.data_size as usize {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "truncated boot payload",
+            ));
+        }
+
+        blobs.push(BootBlob {
+            area,
+            data,
+            delay: Duration::from_millis(u64::from(entry.data_delay)),
+        });
+    }
+
+    Ok(blobs)
 }
 
 async fn open_device(target: &Path) -> Result<(rockusb::nusb::Device, DeviceInfo)> {

@@ -1573,6 +1573,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rockfile"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ff09b2bb83cbea829c1903c8356af61d75919ed2ccd05c6ff9ffc9c21bb84bd"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "rockusb"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1854,6 +1863,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "gptman",
+ "rockfile",
  "rockusb",
  "serde_json",
  "shared",

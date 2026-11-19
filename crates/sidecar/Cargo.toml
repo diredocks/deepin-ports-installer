@@ -13,6 +13,7 @@ fastboot-protocol = "0.4"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 getrandom = "0.4"
 gptman = { version = "3", default-features = false }
+rockfile = "0.1"
 rockusb = { version = "0.4", features = ["nusb"] }
 shared = { path = "../shared", default-features = false }
 serde_json = "1"
