@@ -21,7 +21,7 @@ use crate::{Error, Result};
 
 mod fastboot;
 mod partitions;
-mod rkdeveloptool;
+mod rk;
 mod whole;
 
 const RECONNECT_SETTLE: Duration = Duration::from_secs(1);
@@ -175,10 +175,8 @@ pub(crate) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
         shared::catalog::FlashVia::Fastboot
         | shared::catalog::FlashVia::FastbootTh1520
         | shared::catalog::FlashVia::FastbootSpacemit => fastboot::write(plan, &mut progress).await,
-        shared::catalog::FlashVia::Rkdeveloptool
-        | shared::catalog::FlashVia::RkdeveloptoolSpi
-        | shared::catalog::FlashVia::RkdeveloptoolIdbloaderUboot => {
-            rkdeveloptool::write(plan, &mut progress).await
-        }
+        shared::catalog::FlashVia::RkRoot
+        | shared::catalog::FlashVia::RkSpi
+        | shared::catalog::FlashVia::RkIdbloaderUboot => rk::write(plan, &mut progress).await,
     }
 }

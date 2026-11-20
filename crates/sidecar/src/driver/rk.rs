@@ -1,5 +1,5 @@
-//! `rkdeveloptool`: download a Rockchip MaskROM loader into RAM and write
-//! `root` (`0x40000`) or bootloader (`0` for SPI, or `0x40` + `0x4000`) over RockUSB.
+//! `rk`: download a Rockchip MaskROM loader into RAM and write `root` (`0x40000`)
+//! or bootloader (`0` for SPI, or `0x40` + `0x4000`) over RockUSB.
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -39,17 +39,17 @@ struct BootBlob {
 
 fn build_writes(plan: &FlashPlan) -> Result<Vec<(u32, &Artifact, Option<u64>)>> {
     match plan.via {
-        FlashVia::Rkdeveloptool => Ok(vec![(
+        FlashVia::RkRoot => Ok(vec![(
             ROOT_SECTOR,
             Artifact::by_role(&plan.artifacts, Role::Root)?,
             None,
         )]),
-        FlashVia::RkdeveloptoolSpi => Ok(vec![(
+        FlashVia::RkSpi => Ok(vec![(
             SPI_UBOOT_SECTOR,
             Artifact::by_role(&plan.artifacts, Role::Uboot)?,
             None,
         )]),
-        FlashVia::RkdeveloptoolIdbloaderUboot => {
+        FlashVia::RkIdbloaderUboot => {
             let max_idbloader = u64::from(UBOOT_SECTOR - IDBLOADER_SECTOR) * SECTOR_SIZE as u64;
             Ok(vec![
                 (
@@ -65,7 +65,7 @@ fn build_writes(plan: &FlashPlan) -> Result<Vec<(u32, &Artifact, Option<u64>)>> 
             ])
         }
         other => Err(Error::InvalidPlan(format!(
-            "rkdeveloptool driver does not support `{other}`"
+            "rk driver does not support `{other}`"
         ))),
     }
 }

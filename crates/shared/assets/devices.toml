@@ -155,10 +155,10 @@ links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/rockchip",
 ]
 flash_via = [
-    "rkdeveloptool",
+    "rk-root",
     "dd-root",
-    "rkdeveloptool-spi",
-    "rkdeveloptool-idbloader-uboot",
+    "rk-spi",
+    "rk-idbloader-uboot",
 ]
 
 # NOTE: tested with a7z

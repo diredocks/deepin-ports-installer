@@ -39,16 +39,16 @@ pub enum FlashVia {
     /// Flash SpacemiT K1/K3 (factory bootloader binaries, `boot`, `root`) through `fastboot`.
     FastbootSpacemit,
 
-    /// Write the Rockchip boot medium through `rkdeveloptool` in MaskROM mode.
-    Rkdeveloptool,
+    /// Write the Rockchip root image (`0x40000`) in MaskROM mode over RockUSB.
+    RkRoot,
 
     /// Write the Rockchip SPI bootloader (`u-boot-rockchip-spi.bin` at sector `0`)
-    /// through `rkdeveloptool` in MaskROM mode.
-    RkdeveloptoolSpi,
+    /// in MaskROM mode over RockUSB.
+    RkSpi,
 
     /// Write the Rockchip bootloader (`idbloader.img` at `0x40`, `u-boot.itb` at `0x4000`)
-    /// through `rkdeveloptool` in MaskROM mode.
-    RkdeveloptoolIdbloaderUboot,
+    /// in MaskROM mode over RockUSB.
+    RkIdbloaderUboot,
 }
 
 impl FlashVia {
@@ -64,9 +64,9 @@ impl FlashVia {
             FlashVia::Fastboot => "fastboot",
             FlashVia::FastbootTh1520 => "fastboot-th1520",
             FlashVia::FastbootSpacemit => "fastboot-spacemit",
-            FlashVia::Rkdeveloptool => "rkdeveloptool",
-            FlashVia::RkdeveloptoolSpi => "rkdeveloptool-spi",
-            FlashVia::RkdeveloptoolIdbloaderUboot => "rkdeveloptool-idbloader-uboot",
+            FlashVia::RkRoot => "rk-root",
+            FlashVia::RkSpi => "rk-spi",
+            FlashVia::RkIdbloaderUboot => "rk-idbloader-uboot",
         }
     }
 
@@ -91,9 +91,9 @@ impl FlashVia {
                 Role::Boot,
                 Role::Root,
             ],
-            FlashVia::Rkdeveloptool => &[Role::Loader, Role::Root],
-            FlashVia::RkdeveloptoolSpi => &[Role::Loader, Role::Uboot],
-            FlashVia::RkdeveloptoolIdbloaderUboot => &[Role::Loader, Role::Idbloader, Role::Uboot],
+            FlashVia::RkRoot => &[Role::Loader, Role::Root],
+            FlashVia::RkSpi => &[Role::Loader, Role::Uboot],
+            FlashVia::RkIdbloaderUboot => &[Role::Loader, Role::Idbloader, Role::Uboot],
         }
     }
 

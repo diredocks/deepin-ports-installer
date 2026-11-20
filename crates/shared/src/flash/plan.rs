@@ -316,13 +316,13 @@ mod tests {
     #[test]
     fn rejects_invalid_extra_and_artifact_combinations() {
         let root = Workspace::new("deepin-ports-plan", "extras-err");
-        let rk = remote_source(&[FlashVia::Rkdeveloptool]);
+        let rk = remote_source(&[FlashVia::RkRoot]);
         let target = Path::new("/dev/null");
 
         assert!(matches!(
             plan(&rk, &prepared_with(&[Role::Root]), &[], None, target),
             Err(Error::MissingExtra {
-                via: FlashVia::Rkdeveloptool,
+                via: FlashVia::RkRoot,
                 role: Role::Loader,
             })
         ));
@@ -331,7 +331,7 @@ mod tests {
         assert!(matches!(
             plan(&rk, &prepared_with(&[Role::Boot]), &rk_extras, None, target),
             Err(Error::MissingArtifact {
-                via: FlashVia::Rkdeveloptool,
+                via: FlashVia::RkRoot,
                 role: Role::Root,
             })
         ));
