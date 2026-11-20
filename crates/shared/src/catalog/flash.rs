@@ -39,15 +39,16 @@ pub enum FlashVia {
     /// Flash SpacemiT K1/K3 (factory bootloader binaries, `boot`, `root`) through `fastboot`.
     FastbootSpacemit,
 
-    /// Write the Rockchip root image (`0x40000`) in MaskROM mode over RockUSB.
+    /// Load the Rockchip MaskROM SPL loader (`rk35XX_spl_loader_*.bin`) over RockUSB.
+    RkLoader,
+
+    /// Write the Rockchip root image (`0x40000`) over RockUSB.
     RkRoot,
 
-    /// Write the Rockchip SPI bootloader (`u-boot-rockchip-spi.bin` at sector `0`)
-    /// in MaskROM mode over RockUSB.
+    /// Write the Rockchip SPI bootloader (`u-boot-rockchip-spi.bin` at sector `0`) over RockUSB.
     RkSpi,
 
-    /// Write the Rockchip bootloader (`idbloader.img` at `0x40`, `u-boot.itb` at `0x4000`)
-    /// in MaskROM mode over RockUSB.
+    /// Write the Rockchip bootloader (`idbloader.img` at `0x40`, `u-boot.itb` at `0x4000`) over RockUSB.
     RkIdbloaderUboot,
 }
 
@@ -64,6 +65,7 @@ impl FlashVia {
             FlashVia::Fastboot => "fastboot",
             FlashVia::FastbootTh1520 => "fastboot-th1520",
             FlashVia::FastbootSpacemit => "fastboot-spacemit",
+            FlashVia::RkLoader => "rk-loader",
             FlashVia::RkRoot => "rk-root",
             FlashVia::RkSpi => "rk-spi",
             FlashVia::RkIdbloaderUboot => "rk-idbloader-uboot",
@@ -79,7 +81,7 @@ impl FlashVia {
                 &[Role::Boot, Role::Root]
             }
             FlashVia::DdEfiRoot => &[Role::Efi, Role::Root],
-            FlashVia::DdRoot => &[Role::Root],
+            FlashVia::DdRoot | FlashVia::RkRoot => &[Role::Root],
             FlashVia::DdA733 => &[Role::Boot0, Role::Uboot, Role::Root],
             FlashVia::FastbootTh1520 => &[Role::Uboot, Role::Boot, Role::Root],
             FlashVia::FastbootSpacemit => &[
@@ -91,9 +93,9 @@ impl FlashVia {
                 Role::Boot,
                 Role::Root,
             ],
-            FlashVia::RkRoot => &[Role::Loader, Role::Root],
-            FlashVia::RkSpi => &[Role::Loader, Role::Uboot],
-            FlashVia::RkIdbloaderUboot => &[Role::Loader, Role::Idbloader, Role::Uboot],
+            FlashVia::RkLoader => &[Role::Loader],
+            FlashVia::RkSpi => &[Role::Uboot],
+            FlashVia::RkIdbloaderUboot => &[Role::Idbloader, Role::Uboot],
         }
     }
 

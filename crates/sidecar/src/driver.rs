@@ -175,7 +175,8 @@ pub(crate) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
         shared::catalog::FlashVia::Fastboot
         | shared::catalog::FlashVia::FastbootTh1520
         | shared::catalog::FlashVia::FastbootSpacemit => fastboot::write(plan, &mut progress).await,
-        shared::catalog::FlashVia::RkRoot
+        shared::catalog::FlashVia::RkLoader
+        | shared::catalog::FlashVia::RkRoot
         | shared::catalog::FlashVia::RkSpi
         | shared::catalog::FlashVia::RkIdbloaderUboot => rk::write(plan, &mut progress).await,
     }

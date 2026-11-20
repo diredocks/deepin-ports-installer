@@ -316,20 +316,21 @@ mod tests {
     #[test]
     fn rejects_invalid_extra_and_artifact_combinations() {
         let root = Workspace::new("deepin-ports-plan", "extras-err");
-        let rk = remote_source(&[FlashVia::RkRoot]);
+        let rk_loader = remote_source(&[FlashVia::RkLoader]);
+        let rk_root = remote_source(&[FlashVia::RkRoot]);
         let target = Path::new("/dev/null");
 
         assert!(matches!(
-            plan(&rk, &prepared_with(&[Role::Root]), &[], None, target),
+            plan(&rk_loader, &Prepared::default(), &[], None, target),
             Err(Error::MissingExtra {
-                via: FlashVia::RkRoot,
+                via: FlashVia::RkLoader,
                 role: Role::Loader,
             })
         ));
 
         let rk_extras = write_extras(&root, &[Role::Loader]);
         assert!(matches!(
-            plan(&rk, &prepared_with(&[Role::Boot]), &rk_extras, None, target),
+            plan(&rk_root, &prepared_with(&[Role::Boot]), &[], None, target),
             Err(Error::MissingArtifact {
                 via: FlashVia::RkRoot,
                 role: Role::Root,
@@ -353,8 +354,8 @@ mod tests {
         let loader_path = rk_extras[0].1.clone();
         assert!(matches!(
             plan(
-                &rk,
-                &prepared_with(&[Role::Root]),
+                &rk_loader,
+                &Prepared::default(),
                 &[
                     (Role::Loader, loader_path.clone()),
                     (Role::Loader, loader_path),
@@ -367,8 +368,8 @@ mod tests {
 
         assert!(matches!(
             plan(
-                &rk,
-                &prepared_with(&[Role::Root]),
+                &rk_loader,
+                &Prepared::default(),
                 &[(Role::Loader, root.path().to_path_buf())],
                 None,
                 target,

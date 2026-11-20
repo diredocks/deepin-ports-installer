@@ -1,5 +1,6 @@
-//! `rk`: download a Rockchip MaskROM loader into RAM and write `root` (`0x40000`)
-//! or bootloader (`0` for SPI, or `0x40` + `0x4000`) over RockUSB.
+//! `rk`: RockUSB driver for loading the MaskROM SPL loader (`rk-loader`) and
+//! writing `root` (`0x40000`), SPI U-Boot (`0`), or `idbloader` (`0x40`) +
+//! U-Boot (`0x4000`).
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -17,7 +18,7 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::time::sleep;
 
-use super::{Progress, open_usb_device, reconnect_usb_device};
+use super::{Progress, open_usb_device};
 use crate::{Error, Result};
 
 const CODE_471: u16 = 0x471;
@@ -71,12 +72,25 @@ fn build_writes(plan: &FlashPlan) -> Result<Vec<(u32, &Artifact, Option<u64>)>> 
 }
 
 pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
-    let specs = build_writes(plan)?;
-    let loader = Artifact::by_role(&plan.artifacts, Role::Loader)?;
-    let blobs = parse_loader(&loader.path)?;
+    if plan.via == FlashVia::RkLoader {
+        let loader = Artifact::by_role(&plan.artifacts, Role::Loader)?;
+        let blobs = parse_loader(&loader.path)?;
+        let total = blobs.iter().map(|blob| blob.data.len() as u64).sum();
+        let (mut device, _) = open_usb_device(
+            &plan.target,
+            "rockusb",
+            Error::Rockusb,
+            rockusb::nusb::devices,
+            rockusb::nusb::Device::from_usb_device_info,
+        )
+        .await?;
+        let mut progress = Progress::new(Some(total), &mut progress);
+        return download_boot(&mut device, &blobs, &mut progress).await;
+    }
 
+    let specs = build_writes(plan)?;
     let mut writes = Vec::with_capacity(specs.len());
-    let mut lba_bytes = 0u64;
+    let mut total = 0u64;
     for (sector, artifact, max_bytes) in specs {
         let file = File::open(&artifact.path)
             .await
@@ -95,18 +109,13 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
                 artifact.path.display()
             )));
         }
-        lba_bytes = lba_bytes
+        total = total
             .checked_add(size)
             .ok_or_else(|| Error::InvalidPlan("total write size overflows".into()))?;
         writes.push((sector, &artifact.path, file));
     }
 
-    let loader_bytes: u64 = blobs.iter().map(|blob| blob.data.len() as u64).sum();
-    let total = loader_bytes
-        .checked_add(lba_bytes)
-        .ok_or_else(|| Error::InvalidPlan("total write size overflows".into()))?;
-
-    let (mut device, previous) = open_usb_device(
+    let (mut device, _) = open_usb_device(
         &plan.target,
         "rockusb",
         Error::Rockusb,
@@ -115,18 +124,6 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
     )
     .await?;
     let mut progress = Progress::new(Some(total), &mut progress);
-
-    download_boot(&mut device, &blobs, &mut progress).await?;
-    drop(device);
-
-    let mut device = reconnect_usb_device(
-        &previous,
-        "rockusb",
-        Error::Rockusb,
-        rockusb::nusb::devices,
-        rockusb::nusb::Device::from_usb_device_info,
-    )
-    .await?;
 
     let mut buffer = vec![0u8; WRITE_CHUNK_SIZE];
     for (sector, path, mut file) in writes {

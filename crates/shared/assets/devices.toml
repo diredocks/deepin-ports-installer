@@ -157,6 +157,7 @@ links = [
 flash_via = [
     "rk-root",
     "dd-root",
+    "rk-loader",
     "rk-spi",
     "rk-idbloader-uboot",
 ]
