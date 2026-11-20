@@ -41,6 +41,14 @@ pub enum FlashVia {
 
     /// Write the Rockchip boot medium through `rkdeveloptool` in MaskROM mode.
     Rkdeveloptool,
+
+    /// Write the Rockchip SPI bootloader (`u-boot-rockchip-spi.bin` at sector `0`)
+    /// through `rkdeveloptool` in MaskROM mode.
+    RkdeveloptoolSpi,
+
+    /// Write the Rockchip bootloader (`idbloader.img` at `0x40`, `u-boot.itb` at `0x4000`)
+    /// through `rkdeveloptool` in MaskROM mode.
+    RkdeveloptoolIdbloaderUboot,
 }
 
 impl FlashVia {
@@ -57,6 +65,8 @@ impl FlashVia {
             FlashVia::FastbootTh1520 => "fastboot-th1520",
             FlashVia::FastbootSpacemit => "fastboot-spacemit",
             FlashVia::Rkdeveloptool => "rkdeveloptool",
+            FlashVia::RkdeveloptoolSpi => "rkdeveloptool-spi",
+            FlashVia::RkdeveloptoolIdbloaderUboot => "rkdeveloptool-idbloader-uboot",
         }
     }
 
@@ -82,7 +92,15 @@ impl FlashVia {
                 Role::Root,
             ],
             FlashVia::Rkdeveloptool => &[Role::Loader, Role::Root],
+            FlashVia::RkdeveloptoolSpi => &[Role::Loader, Role::Uboot],
+            FlashVia::RkdeveloptoolIdbloaderUboot => &[Role::Loader, Role::Idbloader, Role::Uboot],
         }
+    }
+
+    /// Whether this write method requires an image artifact in addition to any
+    /// user-supplied `--extra` files.
+    pub fn needs_image(self) -> bool {
+        self.required_roles().iter().any(|role| !role.is_extra())
     }
 }
 

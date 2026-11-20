@@ -15,7 +15,7 @@ pub struct PrepareOptions {
     pub skip_verify: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Prepared {
     pub directory: PathBuf,
     pub artifacts: Vec<Artifact>,

@@ -43,7 +43,10 @@ pub enum Role {
     /// Allwinner stage-1 SPL bootloader (`boot0_sdcard.bin`).
     Boot0,
 
-    /// U-Boot binary or FIT image (`u-boot-with-spl.bin`, `u-boot.itb`, etc.).
+    /// Rockchip stage-1 TPL/SPL bootloader (`idbloader.img`).
+    Idbloader,
+
+    /// U-Boot binary or FIT image (`u-boot-with-spl.bin`, `u-boot.itb`, `u-boot-rockchip-spi.bin`, etc.).
     Uboot,
 }
 
@@ -61,6 +64,7 @@ impl Role {
             Role::Env => "env",
             Role::Opensbi => "opensbi",
             Role::Boot0 => "boot0",
+            Role::Idbloader => "idbloader",
             Role::Uboot => "uboot",
         }
     }
@@ -76,6 +80,7 @@ impl Role {
                 | Role::Env
                 | Role::Opensbi
                 | Role::Boot0
+                | Role::Idbloader
                 | Role::Uboot
         )
     }
@@ -103,7 +108,7 @@ impl Role {
             Role::Fsbl => 2,
             Role::Env => 3,
             Role::Opensbi => 4,
-            Role::Boot0 => 5,
+            Role::Boot0 | Role::Idbloader => 5,
             Role::Uboot => 6,
             Role::Disk | Role::Iso => 7,
             Role::Boot | Role::Efi => 8,
@@ -134,6 +139,7 @@ impl FromStr for Role {
             "env" => Ok(Role::Env),
             "opensbi" => Ok(Role::Opensbi),
             "boot0" => Ok(Role::Boot0),
+            "idbloader" => Ok(Role::Idbloader),
             "uboot" => Ok(Role::Uboot),
             _ => Err(Error::UnknownRole(slug.to_owned())),
         }

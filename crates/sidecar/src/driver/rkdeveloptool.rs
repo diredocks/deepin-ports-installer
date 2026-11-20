@@ -1,5 +1,5 @@
-//! `rkdeveloptool`: download a Rockchip MaskROM loader into RAM and write the
-//! root image at sector `0x40000` over RockUSB.
+//! `rkdeveloptool`: download a Rockchip MaskROM loader into RAM and write
+//! `root` (`0x40000`) or bootloader (`0` for SPI, or `0x40` + `0x4000`) over RockUSB.
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -22,6 +22,9 @@ use crate::{Error, Result};
 
 const CODE_471: u16 = 0x471;
 const CODE_472: u16 = 0x472;
+const SPI_UBOOT_SECTOR: u32 = 0;
+const IDBLOADER_SECTOR: u32 = 0x40;
+const UBOOT_SECTOR: u32 = 0x4000;
 const ROOT_SECTOR: u32 = 0x40000;
 const SECTOR_SIZE: usize = rockusb::protocol::SECTOR_SIZE as usize;
 const MAX_WRITE_SECTORS: usize = 128;
@@ -34,25 +37,73 @@ struct BootBlob {
     delay: Duration,
 }
 
-pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
-    if plan.via != FlashVia::Rkdeveloptool {
-        return Err(Error::InvalidPlan(format!(
-            "rkdeveloptool driver does not support `{}`",
-            plan.via
-        )));
+fn build_writes(plan: &FlashPlan) -> Result<Vec<(u32, &Artifact, Option<u64>)>> {
+    match plan.via {
+        FlashVia::Rkdeveloptool => Ok(vec![(
+            ROOT_SECTOR,
+            Artifact::by_role(&plan.artifacts, Role::Root)?,
+            None,
+        )]),
+        FlashVia::RkdeveloptoolSpi => Ok(vec![(
+            SPI_UBOOT_SECTOR,
+            Artifact::by_role(&plan.artifacts, Role::Uboot)?,
+            None,
+        )]),
+        FlashVia::RkdeveloptoolIdbloaderUboot => {
+            let max_idbloader = u64::from(UBOOT_SECTOR - IDBLOADER_SECTOR) * SECTOR_SIZE as u64;
+            Ok(vec![
+                (
+                    IDBLOADER_SECTOR,
+                    Artifact::by_role(&plan.artifacts, Role::Idbloader)?,
+                    Some(max_idbloader),
+                ),
+                (
+                    UBOOT_SECTOR,
+                    Artifact::by_role(&plan.artifacts, Role::Uboot)?,
+                    None,
+                ),
+            ])
+        }
+        other => Err(Error::InvalidPlan(format!(
+            "rkdeveloptool driver does not support `{other}`"
+        ))),
     }
+}
 
+pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) -> Result<()> {
+    let specs = build_writes(plan)?;
     let loader = Artifact::by_role(&plan.artifacts, Role::Loader)?;
-    let root = Artifact::by_role(&plan.artifacts, Role::Root)?;
-
     let blobs = parse_loader(&loader.path)?;
-    let mut root_file = File::open(&root.path)
-        .await
-        .map_err(|source| fsx::Error::read(&root.path, source))?;
+
+    let mut writes = Vec::with_capacity(specs.len());
+    let mut lba_bytes = 0u64;
+    for (sector, artifact, max_bytes) in specs {
+        let file = File::open(&artifact.path)
+            .await
+            .map_err(|source| fsx::Error::read(&artifact.path, source))?;
+        let size = file
+            .metadata()
+            .await
+            .map_err(|source| fsx::Error::read(&artifact.path, source))?
+            .len();
+
+        if let Some(limit) = max_bytes
+            && size > limit
+        {
+            return Err(Error::InvalidPlan(format!(
+                "`{}` ({size} bytes) exceeds allocated region limit ({limit} bytes)",
+                artifact.path.display()
+            )));
+        }
+        lba_bytes = lba_bytes
+            .checked_add(size)
+            .ok_or_else(|| Error::InvalidPlan("total write size overflows".into()))?;
+        writes.push((sector, &artifact.path, file));
+    }
 
     let loader_bytes: u64 = blobs.iter().map(|blob| blob.data.len() as u64).sum();
     let total = loader_bytes
-        .checked_add(root.size)
+        .checked_add(lba_bytes)
         .ok_or_else(|| Error::InvalidPlan("total write size overflows".into()))?;
 
     let (mut device, previous) = open_usb_device(
@@ -76,14 +127,16 @@ pub(super) async fn write(plan: &FlashPlan, mut progress: impl FnMut(Amount)) ->
         rockusb::nusb::Device::from_usb_device_info,
     )
     .await?;
-    write_root_and_reset(
-        &mut device,
-        &root.path,
-        &mut root_file,
-        ROOT_SECTOR,
-        &mut progress,
-    )
-    .await
+
+    let mut buffer = vec![0u8; WRITE_CHUNK_SIZE];
+    for (sector, path, mut file) in writes {
+        write_lba_file(&mut device, path, &mut file, sector, &mut buffer, &mut progress).await?;
+    }
+
+    device
+        .reset_device(ResetOpcode::Reset)
+        .await
+        .map_err(|err| Error::Rockusb(format!("failed to reset device: {err}")))
 }
 
 fn parse_loader(path: &Path) -> Result<Vec<BootBlob>> {
@@ -188,21 +241,20 @@ where
     Ok(())
 }
 
-async fn write_root_and_reset<T, F>(
+async fn write_lba_file<T, F>(
     device: &mut DeviceAsync<T>,
-    root_path: &Path,
-    root_file: &mut File,
+    path: &Path,
+    file: &mut File,
     mut sector: u32,
+    buffer: &mut [u8],
     progress: &mut Progress<'_, F>,
 ) -> Result<()>
 where
     T: TransportAsync,
     F: FnMut(Amount) + ?Sized,
 {
-    let mut buffer = vec![0u8; WRITE_CHUNK_SIZE];
-
     loop {
-        let read = read_chunk(root_file, root_path, &mut buffer).await?;
+        let read = read_chunk(file, path, buffer).await?;
         if read == 0 {
             break;
         }
@@ -226,10 +278,7 @@ where
         progress.advance(read as u64);
     }
 
-    device
-        .reset_device(ResetOpcode::Reset)
-        .await
-        .map_err(|err| Error::Rockusb(format!("failed to reset device: {err}")))
+    Ok(())
 }
 
 async fn read_chunk(file: &mut File, path: &Path, buf: &mut [u8]) -> Result<usize> {

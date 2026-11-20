@@ -154,7 +154,12 @@ devices = [
 links = [
     "https://deepin-community.github.io/sig-deepin-ports/docs/install/rockchip",
 ]
-flash_via = ["rkdeveloptool", "dd-root"]
+flash_via = [
+    "rkdeveloptool",
+    "dd-root",
+    "rkdeveloptool-spi",
+    "rkdeveloptool-idbloader-uboot",
+]
 
 # NOTE: tested with a7z
 [[devices]]

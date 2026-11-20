@@ -63,7 +63,7 @@ fn parse_extra(spec: &str) -> std::result::Result<(Role, PathBuf), String> {
     let role = Role::from_str(role.trim()).map_err(|err| err.to_string())?;
     if !role.is_extra() {
         return Err(format!(
-            "`{role}` is not a user-supplied extra role; expected one of loader, bootinfo, fsbl, env, opensbi, boot0, uboot"
+            "`{role}` is not a user-supplied extra role; expected one of loader, bootinfo, fsbl, env, opensbi, boot0, idbloader, uboot"
         ));
     }
 
@@ -78,48 +78,24 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     print_source(&source);
     println!("target: {}", args.target.display());
 
+    let needs_image = args.via.is_none_or(FlashVia::needs_image);
     let downloaded = source
         .cache_path()
         .context("failed to resolve the download destination")?;
 
     if args.dry_run {
-        print_preparation(&downloaded);
+        print_preparation(&downloaded, needs_image);
         for (role, path) in &args.extras {
             println!("extra: {} ({role})", path.display());
         }
         return Ok(());
     }
 
-    ensure!(
-        downloaded.is_file(),
-        "{} has not been downloaded yet; run `deepin-ports-installer-cli download {}` first",
-        downloaded.display(),
-        args.source
-    );
-
-    let options = PrepareOptions {
-        force: args.force,
-        skip_verify: args.skip_verify,
+    let prepared = if needs_image {
+        prepare_image(&args, &downloaded, quiet)?
+    } else {
+        Prepared::default()
     };
-
-    log::info!("preparing {}", downloaded.display());
-
-    let bar = render::prepare_bar(quiet);
-    let result = shared::flash::prepare(&downloaded, &options, |progress| {
-        render::prepare_progress(&bar, &progress);
-    });
-    bar.finish_and_clear();
-
-    let prepared = match result {
-        Ok(prepared) => prepared,
-        Err(shared::flash::Error::Unverified { path }) => bail!(
-            "`{}` is not covered by any checksum manifest; pass `--skip-verify` to accept it",
-            path.display()
-        ),
-        Err(error) => return Err(error).context("failed to prepare the image"),
-    };
-
-    print_prepared(&prepared);
 
     let plan = shared::flash::plan(&source, &prepared, &args.extras, args.via, &args.target)
         .context("failed to plan the flash job")?;
@@ -136,6 +112,40 @@ pub fn run(args: FlashArgs, quiet: bool) -> Result<()> {
     log::info!("wrote {}", plan.target.display());
 
     Ok(())
+}
+
+fn prepare_image(args: &FlashArgs, downloaded: &Path, quiet: bool) -> Result<Prepared> {
+    ensure!(
+        downloaded.is_file(),
+        "{} has not been downloaded yet; run `deepin-ports-installer-cli download {}` first",
+        downloaded.display(),
+        args.source
+    );
+
+    let options = PrepareOptions {
+        force: args.force,
+        skip_verify: args.skip_verify,
+    };
+
+    log::info!("preparing {}", downloaded.display());
+
+    let bar = render::prepare_bar(quiet);
+    let prepared = shared::flash::prepare(downloaded, &options, |progress| {
+        render::prepare_progress(&bar, &progress);
+    });
+    bar.finish_and_clear();
+
+    let prepared = match prepared {
+        Ok(prepared) => prepared,
+        Err(shared::flash::Error::Unverified { path }) => bail!(
+            "`{}` is not covered by any checksum manifest; pass `--skip-verify` to accept it",
+            path.display()
+        ),
+        Err(error) => return Err(error).context("failed to prepare the image"),
+    };
+
+    print_prepared(&prepared);
+    Ok(prepared)
 }
 
 fn print_source(source: &Source) {
@@ -162,7 +172,12 @@ fn print_source(source: &Source) {
     }
 }
 
-fn print_preparation(downloaded: &Path) {
+fn print_preparation(downloaded: &Path, needs_image: bool) {
+    if !needs_image {
+        println!("extract: none (not required by write method)");
+        return;
+    }
+
     match Archive::new(downloaded) {
         Some(archive) => println!("extract: {}", archive.extraction_dir().display()),
         None => println!("extract: none (the image is not an archive)"),
